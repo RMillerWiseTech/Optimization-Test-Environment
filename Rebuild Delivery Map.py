@@ -94,7 +94,7 @@ def fmt(value, header=None):
     if value is None:
         return ""
     # identifier-style columns: no thousands separators
-    if header in ("TMS ID", "Shipment Reference Numbers", "Last Drop Postal Code"):
+    if header in ("TMS ID", "Shipment Reference Numbers", "Order Number", "Last Drop Postal Code", "Drop Location Postal Code"):
         if isinstance(value, float) and value.is_integer():
             return str(int(value))
         if isinstance(value, int):
@@ -136,8 +136,28 @@ def build_payload():
     headers = list(rows[0])
     H = {str(h).strip().lower() if h is not None else None: i for i, h in enumerate(headers)}
 
-    def col(name):
-        return H.get(name.lower())
+    # col() tries each alias in order and returns the first match.
+    ALIASES = {
+        "last drop plan date start":  ["last drop plan date start", "leg drop plan start date"],
+        "last drop plan date end":    ["last drop plan date end",   "leg drop plan end date"],
+        "last drop name":             ["last drop name",            "drop location name"],
+        "last drop postal code":      ["last drop postal code",     "drop location postal code"],
+        "pallet spaces":              ["pallet spaces",             "shipment pallet spaces"],
+        "plannedorno":                ["plannedorno",               "load status"],
+        "first pick appt date start": ["first pick appt date start","load pick appt start date"],
+        "last drop appt date start":  ["last drop appt date start", "load drop appt start date"],
+        "shipment reference numbers": ["shipment reference numbers","order number"],
+        "first pick city":            ["first pick city",           "pick location city"],
+        "lat":                        ["lat", "latitude"],
+        "lng":                        ["lng", "lon", "long", "longitude"],
+    }
+    def col(*names):
+        for name in names:
+            for alias in ALIASES.get(name.lower(), [name.lower()]):
+                idx = H.get(alias)
+                if idx is not None:
+                    return idx
+        return None
 
     i_ps    = col("Last Drop Plan Date Start")
     i_pe    = col("Last Drop Plan Date End")
