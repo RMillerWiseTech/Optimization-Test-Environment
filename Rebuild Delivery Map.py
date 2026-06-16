@@ -391,6 +391,16 @@ NEW_CSS = """<style>
   .match-results td { padding:3px 4px; border-top:1px solid #fde68a; vertical-align:middle; }
   .match-results .fill-bar { display:inline-block; height:8px; border-radius:4px; background:var(--accent); }
   .match-map-ring { pointer-events:none; }
+  /* ---- load row selection + export ---- */
+  .loadrow input.load-chk { cursor:pointer; width:14px; height:14px; margin:0; flex-shrink:0; accent-color:var(--accent); }
+  .loadrow.sel-row { background:#eff6ff; box-shadow:inset 3px 0 0 var(--accent); border-radius:4px; }
+  .export-bar { position:sticky; bottom:0; background:#1e3a5f; color:#fff; padding:9px 16px; display:none; align-items:center; gap:12px; border-top:2px solid var(--accent); z-index:60; font-size:13px; }
+  .export-bar.show { display:flex; }
+  .export-bar .exp-count { font-weight:700; }
+  .export-bar .exp-btn { padding:6px 14px; background:#fff; color:var(--accent); border:none; border-radius:6px; font-weight:700; cursor:pointer; font-size:13px; }
+  .export-bar .exp-btn:hover { background:#dbeafe; }
+  .export-bar .exp-clear { background:transparent; color:#93c5fd; font-size:12px; border:1px solid #93c5fd; border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .export-bar .exp-clear:hover { background:rgba(255,255,255,.1); }
   .tms-banner .tms-warn { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; color:#9a3b00; font-size:12.5px; line-height:1.7; }
   .tms-banner .tms-warn .wgrp { white-space:nowrap; background:#ffe0cc; border-radius:3px; padding:1px 5px; }
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
@@ -491,7 +501,8 @@ L.control.layers({"Street map (OSM)":_osmLayer,"Satellite (Google)":_gSat,"Hybri
      'let activePick = null, activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;\n'  # activePick: null=all, Set=specific
      'let activeLoadGroup = "ALL", loadGroups = [], lgCounts = {};\n'
      'let dateMin = null, dateMax = null, dateFrom = null, dateTo = null, sliderInit = false;\n'
-     'let loadsSortKey = "", loadsSortDir = 1, loadsDC = "";'),
+     'let loadsSortKey = "", loadsSortDir = 1, loadsDC = "";\n'
+     'let selectedTms = new Set();'),
 
     # --- JS: colorKeyForOrders handles POOL ---
     ('colorKeyForOrders',
@@ -951,7 +962,10 @@ function loadList(orders){
     const del=_apptStr(o,"Last Drop Appt Date Start");
     const pik=_apptStr(o,"First Pick Appt Date Start");
     const win = o.planStart ? (o.planStart===o.planEnd ? fmtDayISO(o.planStart) : fmtDayISO(o.planStart)+" &ndash; "+fmtDayISO(o.planEnd)) : "";
-    h+='<div class="loadrow"'+(o.tms?' data-tms="'+esc(o.tms)+'"':'')+'><span class="ref">'+esc(refOf(o))+'</span>'+
+    const chkd = o.tms && selectedTms.has(String(o.tms));
+    h+='<div class="loadrow'+(chkd?' sel-row':'')+'"'+(o.tms?' data-tms="'+esc(o.tms)+'"':'')+'>'+
+       (o.tms?'<input type="checkbox" class="load-chk" data-tms="'+esc(o.tms)+'"'+(chkd?' checked':'')+' title="Select for export">':'<span style="width:14px;flex-shrink:0"></span>')+
+       '<span class="ref">'+esc(refOf(o))+'</span>'+
        (o.tms?'<span class="tms-chip" data-tms="'+esc(o.tms)+'" title="Click to highlight everything on this load">'+esc(o.tms)+'</span>':'')+
        (o.status?'<span class="badge2 '+esc(o.status)+'">'+esc(o.status)+'</span>':'')+
        (o.name?'<span class="lname">'+esc(o.name)+'</span>':'')+
@@ -976,6 +990,11 @@ function loadList(orders){
     <button id="nav-settings" class="pagebtn">Rules &amp; Limits</button>
   </div>
   <div id="topdate" class="topdate">Data as of &mdash;</div>'''),
+
+    # --- Loads page: add export bar at bottom ---
+    ('loads page export bar',
+     '<div id="loads-summary"></div>',
+     '<div id="loads-summary"></div>\n  <div id="export-bar" class="export-bar"><span class="exp-count" id="exp-count">0 loads selected</span><button class="exp-btn" id="exp-btn">⬇ Export to Excel (CSV)</button><button class="exp-clear" id="exp-clear">Clear selection</button></div>'),
     ('topbar data stamp fill',
      'document.getElementById("stale-banner").style.display=data.stale?"block":"none"; }',
      'document.getElementById("stale-banner").style.display=data.stale?"block":"none"; var td=document.getElementById("topdate"); if(td) td.innerHTML="Data as of <b>"+esc(data.updatedAt||"")+"</b>"; }'),
@@ -1358,6 +1377,60 @@ function buildPayloadFromWB(wb){
   }
   btn.addEventListener("click", load);
   fi.addEventListener("change", ()=>{ if(fi.files&&fi.files[0]) up('Ready: "'+fi.files[0].name+'". Click "Load Data".'); });
+})();
+/* ---- load row selection + CSV export ---- */
+function updateExportBar(){
+  const bar = document.getElementById("export-bar");
+  const cnt = document.getElementById("exp-count");
+  if (!bar) return;
+  if (selectedTms.size === 0){ bar.classList.remove("show"); return; }
+  bar.classList.add("show");
+  // Count raw shipments (not merged stops) so the count matches what will export
+  const raw = DATA._raw || DATA.orders;
+  const n = raw.filter(o => o.tms && selectedTms.has(String(o.tms))).length;
+  if (cnt) cnt.textContent = n + " shipment" + (n!==1?"s":"") + " selected (" + selectedTms.size + " load" + (selectedTms.size!==1?"s":"") + ")";
+}
+function exportSelectedLoads(){
+  if (!selectedTms.size) return;
+  const raw = DATA._raw || DATA.orders;
+  const rows = raw.filter(o => o.tms && selectedTms.has(String(o.tms)));
+  if (!rows.length) return;
+  // Build header row from the fields of the first record + extra structured columns
+  const extraHdrs = ["TMS ID","Pick DC","Status","Load Group","Plan Start","Plan End","Pick Date","Weight (lb)","Pallet Spaces","Pallets"];
+  const fieldHdrs = (rows[0].fields||[]).map(f=>f[0]).filter(h => !extraHdrs.map(x=>x.toLowerCase()).includes(h.toLowerCase()));
+  const allHdrs = [...extraHdrs, ...fieldHdrs];
+  const fieldIdx = Object.fromEntries((rows[0].fields||[]).map((f,i)=>[f[0].toLowerCase(),i]));
+  function fv(o, label){ const f=(o.fields||[]).find(x=>x[0].toLowerCase()===label.toLowerCase()); return f?f[1]:""; }
+  const csvRows = [allHdrs];
+  for (const o of rows){
+    const extra = [
+      o.tms||"",
+      o.pick ? ((pickByKey.get(o.pick)||{}).name||o.pick) : "",
+      o.status||"", o.loadGroup||"",
+      o.planStart||"", o.planEnd||"", o.pickDate||"",
+      o.weight!=null?o.weight:"", o.palletSpaces!=null?o.palletSpaces:"", o.pallets!=null?o.pallets:""
+    ];
+    const fieldVals = fieldHdrs.map(h=>fv(o,h));
+    csvRows.push([...extra, ...fieldVals]);
+  }
+  const csv = csvRows.map(r=>r.map(v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+  const blob = new Blob(["﻿"+csv], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href=url; a.download="SelectedLoads.csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+(function wireExportBar(){
+  document.addEventListener("change", e=>{
+    const chk = e.target.closest(".load-chk"); if (!chk) return;
+    const t = String(chk.dataset.tms||""); if(!t) return;
+    const row = chk.closest(".loadrow");
+    if (chk.checked){ selectedTms.add(t); if(row) row.classList.add("sel-row"); }
+    else { selectedTms.delete(t); if(row) row.classList.remove("sel-row"); }
+    updateExportBar();
+  });
+  document.addEventListener("click", e=>{
+    const b=e.target.closest("#exp-btn"); if(b){ exportSelectedLoads(); return; }
+    const c=e.target.closest("#exp-clear"); if(c){ selectedTms.clear(); updateExportBar(); renderLoads(); }
+  });
 })();
 /* ---- consolidation match finder ---- */
 let _matchLayer = null, _matchTms = null;
