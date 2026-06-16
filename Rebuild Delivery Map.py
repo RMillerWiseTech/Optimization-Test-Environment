@@ -402,6 +402,25 @@ PATCHES = [
      ".pop-head.green{background:var(--green)} .pop-head.red{background:var(--red)} .pop-head.orange{background:var(--orange)}",
      ".pop-head.green{background:var(--green)} .pop-head.red{background:var(--red)} .pop-head.orange{background:var(--orange)} .pop-head.pool{background:var(--pool)} .pop-head.accepted{background:var(--accepted)} .pop-head.active{background:var(--active)} .pop-head.tendered{background:var(--tendered)} .pop-head.pending{background:var(--pending)}"),
 
+    # --- Map: replace single OSM tile layer with layer control (OSM + Google Satellite + Hybrid) ---
+    ('tile layer control',
+     '''L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);''',
+     '''const _osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+});
+const _gSat = L.tileLayer("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+  subdomains:["0","1","2","3"], maxZoom:21,
+  attribution:'&copy; <a href="https://maps.google.com">Google</a>'
+});
+const _gHybrid = L.tileLayer("https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+  subdomains:["0","1","2","3"], maxZoom:21,
+  attribution:'&copy; <a href="https://maps.google.com">Google</a>'
+});
+_osmLayer.addTo(map);
+L.control.layers({"Street map (OSM)":_osmLayer,"Satellite (Google)":_gSat,"Hybrid (Google)":_gHybrid},{},{position:"topright",collapsed:false}).addTo(map);'''),
+
     # (CSS + SheetJS are injected at </head> in main(), not here)
 
     # --- body: status filters get id + POOL button; add Load Group + Date sections ---

@@ -1230,9 +1230,19 @@ const PICK_COLORS = {
 function pickColor(key){ return PICK_COLORS[key] || "#37474f"; }
 
 const map = L.map("map", { zoomControl:true }).setView([39.5, -96], 4);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+const _osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-}).addTo(map);
+});
+const _gSat = L.tileLayer("https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+  subdomains:["0","1","2","3"], maxZoom:21,
+  attribution:'&copy; <a href="https://maps.google.com">Google</a>'
+});
+const _gHybrid = L.tileLayer("https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+  subdomains:["0","1","2","3"], maxZoom:21,
+  attribution:'&copy; <a href="https://maps.google.com">Google</a>'
+});
+_osmLayer.addTo(map);
+L.control.layers({"Street map (OSM)":_osmLayer,"Satellite (Google)":_gSat,"Hybrid (Google)":_gHybrid},{},{position:"topright",collapsed:false}).addTo(map);
 
 const cluster = L.markerClusterGroup({ maxClusterRadius:45, spiderfyOnMaxZoom:true, showCoverageOnHover:false });
 const originLines = L.layerGroup();
