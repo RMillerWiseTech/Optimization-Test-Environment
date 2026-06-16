@@ -1015,6 +1015,15 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .tms-banner { margin:8px 0 2px; padding:7px 12px; background:#fff8e1; border:1px solid #f0c000; border-left:4px solid #f0a000; border-radius:6px; font-size:13px; color:#5a4a00; }
   .tms-banner .tms-clear { margin-left:10px; color:var(--accent); cursor:pointer; font-weight:600; white-space:nowrap; }
   .tms-banner .tms-clear:hover { text-decoration:underline; }
+  .tms-banner .tms-findmatch { margin-left:10px; color:#92400e; background:#fef3c7; border:1px solid #f59e0b; border-radius:5px; padding:1px 8px; cursor:pointer; font-weight:600; white-space:nowrap; font-size:12px; }
+  .tms-banner .tms-findmatch:hover { background:#fde68a; }
+  .tms-banner .tms-findmatch.active { background:#f59e0b; color:#fff; border-color:#d97706; }
+  .match-results { margin-top:8px; padding-top:8px; border-top:1px dashed #e0b000; }
+  .match-results table { width:100%; font-size:12px; border-collapse:collapse; }
+  .match-results th { color:#78350f; font-weight:600; font-size:11px; padding:2px 4px; text-align:left; }
+  .match-results td { padding:3px 4px; border-top:1px solid #fde68a; vertical-align:middle; }
+  .match-results .fill-bar { display:inline-block; height:8px; border-radius:4px; background:var(--accent); }
+  .match-map-ring { pointer-events:none; }
   .tms-banner .tms-warn { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; color:#9a3b00; font-size:12.5px; line-height:1.7; }
   .tms-banner .tms-warn .wgrp { white-space:nowrap; background:#ffe0cc; border-radius:3px; padding:1px 5px; }
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
@@ -1624,6 +1633,121 @@ function buildPayloadFromWB(wb){
   btn.addEventListener("click", load);
   fi.addEventListener("change", ()=>{ if(fi.files&&fi.files[0]) up('Ready: "'+fi.files[0].name+'". Click "Load Data".'); });
 })();
+/* ---- consolidation match finder ---- */
+let _matchLayer = null, _matchTms = null;
+function clearMatchHighlight(){
+  if (_matchLayer){ _matchLayer.clearLayers(); }
+  document.querySelectorAll('.match-results').forEach(el=>el.remove());
+  document.querySelectorAll('.tms-findmatch.active').forEach(el=>el.classList.remove('active'));
+  _matchTms = null;
+}
+function findConsolidationMatches(tms){
+  const btn = document.querySelector('.tms-findmatch[data-tms="'+tms+'"]');
+  if (_matchTms === String(tms)){ clearMatchHighlight(); return; }
+  clearMatchHighlight();
+  _matchTms = String(tms);
+  if (btn) btn.classList.add('active');
+
+  const raw = DATA._raw || DATA.orders;
+  const maxW = (SETTINGS && SETTINGS.maxWeight) || 44000;
+  const maxP = (SETTINGS && SETTINGS.maxPallets) || 26;
+
+  const mine = raw.filter(o => String(o.tms) === _matchTms);
+  if (!mine.length){ clearMatchHighlight(); return; }
+
+  const myWt  = mine.reduce((s,o)=>s+(o.weight||0),0);
+  const myPal = mine.reduce((s,o)=>s+(o.palletSpaces||0),0);
+  const myPick = mine[0].pick;
+
+  // Effective window: latest start → earliest end across all stops on this load
+  const myWins = mine.map(o=>orderWindow(o)).filter(Boolean);
+  const myWs = myWins.length ? Math.max(...myWins.map(w=>w.ws)) : null;
+  const myWe = myWins.length ? Math.min(...myWins.map(w=>w.we)) : null;
+
+  // Group all other orders by TMS
+  const byTms = new Map();
+  for (const o of raw){
+    if (!o.tms || String(o.tms)===_matchTms) continue;
+    if (!byTms.has(String(o.tms))) byTms.set(String(o.tms),[]);
+    byTms.get(String(o.tms)).push(o);
+  }
+
+  const matches = [];
+  byTms.forEach((orders, otherTms)=>{
+    const otherPick = orders[0].pick;
+    if (myPick && otherPick && myPick !== otherPick) return;   // different DC → skip
+
+    const oWt  = orders.reduce((s,o)=>s+(o.weight||0),0);
+    const oPal = orders.reduce((s,o)=>s+(o.palletSpaces||0),0);
+    if (myWt+oWt > maxW || myPal+oPal > maxP) return;          // over truck limit → skip
+
+    // Delivery window overlap
+    if (myWs !== null && myWe !== null){
+      const oWins = orders.map(o=>orderWindow(o)).filter(Boolean);
+      if (oWins.length){
+        const oWs = Math.max(...oWins.map(w=>w.ws));
+        const oWe = Math.min(...oWins.map(w=>w.we));
+        if (Math.max(myWs,oWs) > Math.min(myWe,oWe)) return;  // no overlap → skip
+      }
+    }
+
+    const oWins2 = orders.map(o=>orderWindow(o)).filter(Boolean);
+    const oWs2 = oWins2.length ? Math.max(...oWins2.map(w=>w.ws)) : null;
+    const oWe2 = oWins2.length ? Math.min(...oWins2.map(w=>w.we)) : null;
+    const cWs = (myWs!==null&&oWs2!==null) ? Math.max(myWs,oWs2) : (myWs??oWs2);
+    const cWe = (myWe!==null&&oWe2!==null) ? Math.min(myWe,oWe2) : (myWe??oWe2);
+    const oName = [...new Set(orders.map(o=>o.name).filter(Boolean))].slice(0,2).join(' + ');
+    const oPkNm = otherPick ? ((pickByKey.get(otherPick)||{}).name||otherPick) : '—';
+    matches.push({ tms:otherTms, orders, wt:oWt, pal:oPal, name:oName, pickName:oPkNm,
+      cWt:myWt+oWt, cPal:myPal+oPal, cWs, cWe });
+  });
+
+  // Sort: highest combined pallet utilisation first
+  matches.sort((a,b)=>b.cPal-a.cPal);
+
+  // Ring matching destination markers on the map with gold dashes
+  if (!_matchLayer) _matchLayer = L.layerGroup().addTo(map);
+  const matchSet = new Set(matches.map(m=>m.tms));
+  for (const rec of (markerRecs||[])){
+    if ((rec.group.orders||[]).some(o=>o.tms && matchSet.has(String(o.tms)))){
+      L.circleMarker([rec.latlng[0],rec.latlng[1]],{
+        radius:20, color:'#f59e0b', weight:3, fill:false, opacity:0.9,
+        dashArray:'6,4', className:'match-map-ring'
+      }).addTo(_matchLayer);
+    }
+  }
+
+  // Build results panel
+  const _fd = dn=>{ if(dn==null) return '—'; const d=new Date(dn*86400000); return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()]+" "+d.getUTCDate()+", "+d.getUTCFullYear(); };
+  let rh = '<div class="match-results">';
+  if (!matches.length){
+    rh += '<div style="color:#92400e;font-size:12.5px;">No other loads from the same DC fit on the same truck with an overlapping delivery window.</div>';
+  } else {
+    rh += '<div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:6px;">✅ '+matches.length+' load'+(matches.length>1?'s':'')+' could ship with this one (gold rings on map):</div>';
+    rh += '<table><tr class="match-hdr"><th>TMS #</th><th>Destination</th><th style="text-align:right">Wt (lb)</th><th style="text-align:right">Pal sp</th><th>Ship window</th><th style="text-align:right">Truck fill</th></tr>';
+    for (const m of matches){
+      const wFill  = Math.round(m.cWt/maxW*100);
+      const pFill  = Math.round(m.cPal/maxP*100);
+      const fill   = Math.max(wFill,pFill);
+      const fillCl = fill>90?'#c62828':fill>75?'#ef6c00':'#2e7d32';
+      const winStr = (m.cWs!=null&&m.cWe!=null) ? _fd(m.cWs)+(m.cWs!==m.cWe?' – '+_fd(m.cWe):'') : '—';
+      rh += '<tr><td><span class="tms-chip" data-tms="'+esc(m.tms)+'">'+esc(m.tms)+'</span></td>'+
+            '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
+            '<td style="text-align:right;white-space:nowrap">'+Math.round(m.wt).toLocaleString()+' lb</td>'+
+            '<td style="text-align:right;white-space:nowrap">'+(Math.round(m.pal*10)/10)+' sp</td>'+
+            '<td style="white-space:nowrap">'+esc(winStr)+'</td>'+
+            '<td style="text-align:right;font-weight:700;color:'+fillCl+';white-space:nowrap">'+
+              '<div class="fill-bar" style="width:'+Math.min(fill,100)+'px;background:'+fillCl+'"></div> '+fill+'%'+
+            '</td></tr>';
+    }
+    rh += '</table><div style="font-size:11px;color:#92400e;margin-top:6px">Truck limits: '+maxW.toLocaleString()+' lb · '+maxP+' pallet sp · Same pick DC only · Delivery windows must overlap</div>';
+  }
+  rh += '</div>';
+
+  // Append to the visible TMS banner
+  const banner = document.querySelector('#loads-body .dc-banner[style*="display"]:not([style*="display: none"]):not([style*="display:none"])');
+  if (banner){ banner.insertAdjacentHTML('beforeend', rh); }
+}
 function buildMarkers(){
   markerRecs = groups.map(g => {
     const marker = L.marker([g.lat,g.lng], { icon:pinIcon(colorKeyForOrders(g.orders)) });
@@ -1926,7 +2050,7 @@ function highlightTms(t){
     if(locKeys.length>1){
       breakdown='<div class="tms-locs">'+locKeys.map(k=>{ const ls=locMap[k]; const lw=ls.reduce((s,o)=>s+(o.weight||0),0), lp=ls.reduce((s,o)=>s+(o.palletSpaces||0),0); return '<div class="locrow">&#8226; <b>'+_locLabel(ls)+'</b> &mdash; '+ls.length+' shipment'+(ls.length>1?'s':'')+' &middot; '+Math.round(lw).toLocaleString()+' lb &middot; '+(Math.round(lp*10)/10)+' pallet sp</div>'; }).join('')+'</div>';
     }
-    const html='<b>Load '+esc(t)+'</b> &mdash; '+mates.length+' shipment'+(mates.length>1?'s':'')+' &middot; '+locKeys.length+' location'+(locKeys.length>1?'s':'')+' &middot; '+Math.round(wt).toLocaleString()+' lb &middot; '+(Math.round(sp*10)/10)+' pallet sp'+(days.length?' &middot; deliver '+esc(days.join(", ")):'')+' <span class="tms-clear">clear &times;</span>'+breakdown+(warns.length?'<div class="tms-warn">&#9888;&#65039; Same location, delivery windows do not overlap &mdash; '+warns.join('; ')+'</div>':'');
+    const html='<b>Load '+esc(t)+'</b> &mdash; '+mates.length+' shipment'+(mates.length>1?'s':'')+' &middot; '+locKeys.length+' location'+(locKeys.length>1?'s':'')+' &middot; '+Math.round(wt).toLocaleString()+' lb &middot; '+(Math.round(sp*10)/10)+' pallet sp'+(days.length?' &middot; deliver '+esc(days.join(", ")):'')+' <span class="tms-clear">clear &times;</span><span class="tms-findmatch" data-tms="'+esc(t)+'" title="Find loads that could ship with this one">🔍 Find consolidation matches</span>'+breakdown+(warns.length?'<div class="tms-warn">&#9888;&#65039; Same location, delivery windows do not overlap &mdash; '+warns.join('; ')+'</div>':'');
     const sec=rows[0].closest(".dc-sec"); const bn=sec?sec.querySelector(".dc-banner"):null;
     if(bn){ bn.innerHTML=html; bn.style.display=""; bn.scrollIntoView({block:"nearest"}); }
   }
@@ -1951,7 +2075,9 @@ function loadList(orders){
 }
 document.getElementById("loads-body").addEventListener("click", e => {
   const clr=e.target.closest(".tms-clear");
-  if(clr){ if(_hlTms) highlightTms(_hlTms); return; }
+  if(clr){ if(_hlTms) highlightTms(_hlTms); clearMatchHighlight(); return; }
+  const fm=e.target.closest(".tms-findmatch");
+  if(fm){ findConsolidationMatches(fm.dataset.tms); return; }
   const chip=e.target.closest(".tms-chip");
   if(chip){ highlightTms(chip.dataset.tms); return; }
   const th=e.target.closest("th.lh");
