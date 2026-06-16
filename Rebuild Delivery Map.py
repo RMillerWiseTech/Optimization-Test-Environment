@@ -38,7 +38,10 @@ def extract_sheetjs():
     """
     if os.path.exists(SHEETJS_CACHE):
         with open(SHEETJS_CACHE, "r", encoding="utf-8") as f:
-            return f.read()
+            cached = f.read()
+        if "XLSX" in cached[:500] or "SheetJS" in cached[:500]:
+            return cached
+        os.remove(SHEETJS_CACHE)  # bad cache (e.g. data blob written by mistake) — discard it
 
     js = None
     if os.path.exists(MAKER_HTML):
@@ -57,6 +60,10 @@ def extract_sheetjs():
             start = h.rfind("<script>", 0, end)
             if start != -1 and end != -1:
                 js = h[start + len("<script>"):end]
+
+    # Sanity-check: extracted content must look like SheetJS (not the embedded data blob)
+    if js and ("XLSX" not in js[:500] and "SheetJS" not in js[:500]):
+        js = None
 
     if not js:
         print("  WARNING: SheetJS not found — in-browser 'Load Data' button will be disabled.")
@@ -453,7 +460,7 @@ PATCHES = [
     # --- JS: state vars ---
     ('state vars',
      'let activePick = "ALL", activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;',
-     'let activePick = "ALL", activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;\n'
+     'let activePick = null, activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;\n'  # activePick: null=all, Set=specific
      'let activeLoadGroup = "ALL", loadGroups = [], lgCounts = {};\n'
      'let dateMin = null, dateMax = null, dateFrom = null, dateTo = null, sliderInit = false;\n'
      'let loadsSortKey = "", loadsSortDir = 1, loadsDC = "";'),
@@ -483,16 +490,89 @@ function colorKeyForOrders(list){
   return true;
 }''',
      '''function orderVisible(o){
-  if (activePick !== "ALL" && o.pick !== activePick) return false;
+  if (activePick !== null && !activePick.has(o.pick||"")) return false;
   if (activeStatus !== "ALL" && o.status !== activeStatus) return false;
   if (activeLoadGroup !== "ALL" && (o.loadGroup||"") !== activeLoadGroup) return false;
   if (smallOnly && !(o.palletSpaces!==null && o.palletSpaces < threshold)) return false;
   if (dateFrom !== null){
     const d = dayNum(o.planStart);
-    if (d!=null && (d < dateFrom || d > dateTo)) return false;   // Last Drop Plan Date Start outside selection
+    if (d!=null && (d < dateFrom || d > dateTo)) return false;
   }
   return true;
 }'''),
+
+    # --- JS: buildTabs becomes a multi-select pick filter (only show DCs with orders, show count) ---
+    ('buildTabs multiselect',
+     '''function buildTabs(){
+  const wrap = document.getElementById("picktabs");
+  wrap.innerHTML = "";
+  const tabs = [{key:"ALL", name:"All"}].concat(picks.map(p => ({key:p.key, name:p.name.split(",")[0]})));
+  for (const t of tabs){
+    const btn = document.createElement("button");
+    btn.className = "ptab" + (t.key===activePick ? " active":"");
+    const col = t.key==="ALL" ? "#334155" : pickColor(t.key);
+    if (t.key===activePick) btn.style.background = col;
+    const cnt = pickCounts[t.key]!==undefined ? pickCounts[t.key] : 0;
+    btn.innerHTML = (t.key==="ALL" ? "" : '<span class="pdot" style="background:'+col+'"></span>') +
+                    esc(t.name) + ' <span class="pcount">'+cnt+'</span>';
+    btn.addEventListener("click", () => { activePick = t.key; buildTabs(); applyFilters(true); });
+    wrap.appendChild(btn);
+  }
+}''',
+     '''function buildTabs(){
+  const wrap = document.getElementById("picktabs");
+  wrap.innerHTML = "";
+  // "All" / "Clear" control
+  const allOn = (activePick === null);
+  const allBtn = document.createElement("button");
+  allBtn.className = "ptab" + (allOn ? " active" : "");
+  if (allOn) allBtn.style.background = "#334155"; else allBtn.style.background = "";
+  const totalCnt = Object.values(pickCounts).reduce((s,v)=>s+(typeof v==="number"?v:0), 0);
+  allBtn.innerHTML = 'All <span class="pcount">' + totalCnt + '</span>';
+  allBtn.title = allOn ? "Click to deselect all" : "Click to select all";
+  allBtn.addEventListener("click", () => { activePick = allOn ? new Set() : null; buildTabs(); applyFilters(true); });
+  wrap.appendChild(allBtn);
+  // One button per pick that has at least one order
+  for (const p of picks){
+    const cnt = pickCounts[p.key] || 0;
+    if (cnt === 0) continue;
+    const on = (activePick === null) || activePick.has(p.key);
+    const btn = document.createElement("button");
+    btn.className = "ptab" + (on ? " active" : "");
+    const col = pickColor(p.key);
+    btn.style.background = on ? col : "";
+    btn.innerHTML = '<span class="pdot" style="background:'+col+'"></span>' +
+                    esc(p.name.split(",")[0]) + ' <span class="pcount">'+cnt+'</span>';
+    btn.title = (on ? "Click to hide " : "Click to show ") + p.name;
+    btn.addEventListener("click", () => {
+      if (activePick === null){
+        // all on → deselect just this one (keep all others)
+        activePick = new Set(picks.filter(x=>(pickCounts[x.key]||0)>0 && x.key!==p.key).map(x=>x.key));
+      } else if (activePick.has(p.key)){
+        activePick = new Set([...activePick].filter(k=>k!==p.key));
+        if (activePick.size === 0) activePick = null;
+      } else {
+        activePick = new Set([...activePick, p.key]);
+        // if all DCs with orders are now selected, collapse back to null
+        const withOrders = picks.filter(x=>(pickCounts[x.key]||0)>0).map(x=>x.key);
+        if (withOrders.every(k=>activePick.has(k))) activePick = null;
+      }
+      buildTabs(); applyFilters(true);
+    });
+    wrap.appendChild(btn);
+  }
+}'''),
+
+    # --- JS: result count supports multi-select pick ---
+    ('result count pick label',
+     'layers.length+" of "+markerRecs.length+" drop locations" + (activePick!=="ALL"?" · "+(pickByKey.get(activePick)||{}).name:"");',
+     '''layers.length+" of "+markerRecs.length+" drop locations" +
+    (activePick!==null ? " · " + [...activePick].map(k=>(pickByKey.get(k)||{}).name||k).join(", ") : "");'''),
+
+    # --- JS: drawOriginMarkers supports multi-select pick ---
+    ('drawOriginMarkers multiselect',
+     'const show = (activePick==="ALL") ? keys : new Set([activePick]);',
+     'const show = (activePick === null) ? keys : new Set([...activePick].filter(k => keys.has(k)));'),
 
     # --- JS: searchText include loadGroup ---
     ('searchText loadGroup',
