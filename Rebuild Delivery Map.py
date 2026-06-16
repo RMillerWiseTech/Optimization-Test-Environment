@@ -68,11 +68,84 @@ def extract_sheetjs():
     return js
 
 DEFAULT_PICKS = [
-    {"key": "JONESTOWN", "name": "Jonestown, PA", "lat": 40.4115, "lng": -76.4814, "match": ["JONESTOWN"]},
-    {"key": "GOODYEAR", "name": "Goodyear, AZ", "lat": 33.4353, "lng": -112.3576, "match": ["GOODYEAR"]},
-    {"key": "DEKALB", "name": "DeKalb, IL", "lat": 41.9294, "lng": -88.7504, "match": ["DEKALB", "DE KALB"]},
-    {"key": "GRAND PRAIRIE", "name": "Grand Prairie, TX", "lat": 32.7459, "lng": -96.9978, "match": ["GRAND PRAIRIE", "PRAIRIE"]},
-    {"key": "MCDONOUGH", "name": "McDonough, GA", "lat": 33.4473, "lng": -84.1469, "match": ["MCDONOUGH", "MCDONUGH", "MCDON"]},
+    {"key": "ARABI",           "name": "Arabi, LA",              "lat": 29.9544,  "lng": -90.0053,  "match": ["ARABI"]},
+    {"key": "ATLANTA",         "name": "Atlanta, GA",             "lat": 33.7658,  "lng": -84.3949,  "match": ["ATLANTA"]},
+    {"key": "AURORA",          "name": "Aurora, CO",              "lat": 39.7393,  "lng": -104.863,  "match": ["AURORA"]},
+    {"key": "BALTIMORE",       "name": "Baltimore, MD",           "lat": 39.3515,  "lng": -76.3753,  "match": ["BALTIMORE"]},
+    {"key": "BATON_ROUGE",     "name": "Baton Rouge, LA",         "lat": 30.3506,  "lng": -91.0874,  "match": ["BATON ROUGE"]},
+    {"key": "BETHLEHEM",       "name": "Bethlehem, PA",           "lat": 40.5968,  "lng": -75.3762,  "match": ["BETHLEHEM"]},
+    {"key": "BOLINGBROOK",     "name": "Bolingbrook, IL",         "lat": 41.6949,  "lng": -88.0803,  "match": ["BOLINGBROOK"]},
+    {"key": "BRAMPTON",        "name": "Brampton, ON",            "lat": 43.7315,  "lng": -79.7624,  "match": ["BRAMPTON"]},
+    {"key": "BRIDGEPORT",      "name": "Bridgeport, NJ",          "lat": 39.8004,  "lng": -75.3478,  "match": ["BRIDGEPORT"]},
+    {"key": "BRIGHTON",        "name": "Brighton, CO",            "lat": 39.9727,  "lng": -104.8104, "match": ["BRIGHTON"]},
+    {"key": "BURLINGTON",      "name": "Burlington, NJ",          "lat": 40.0705,  "lng": -74.8662,  "match": ["BURLINGTON"]},
+    {"key": "BUTNER",          "name": "Butner, NC",              "lat": 36.1547,  "lng": -78.7590,  "match": ["BUTNER"]},
+    {"key": "CALGARY",         "name": "Calgary, AB",             "lat": 51.0447,  "lng": -114.0719, "match": ["CALGARY"]},
+    {"key": "CAMBRIDGE",       "name": "Cambridge, ON",           "lat": 43.3601,  "lng": -80.3124,  "match": ["CAMBRIDGE"]},
+    {"key": "CARTHAGE",        "name": "Carthage, MO",            "lat": 37.1786,  "lng": -94.3140,  "match": ["CARTHAGE"]},
+    {"key": "CHILLIWACK",      "name": "Chilliwack, BC",          "lat": 49.1579,  "lng": -121.9514, "match": ["CHILLIWACK"]},
+    {"key": "COUNCIL_BLUFFS",  "name": "Council Bluffs, IA",      "lat": 41.2209,  "lng": -95.8882,  "match": ["COUNCIL BLUFFS"]},
+    {"key": "DECATUR",         "name": "Decatur, IN",             "lat": 40.8312,  "lng": -84.9286,  "match": ["DECATUR"]},
+    {"key": "DELTA",           "name": "Delta, BC",               "lat": 49.0847,  "lng": -123.0587, "match": ["DELTA"]},
+    {"key": "EDMONTON",        "name": "Edmonton, AB",            "lat": 53.5461,  "lng": -113.4938, "match": ["EDMONTON"]},
+    {"key": "ELK_GROVE_VILLAGE","name": "Elk Grove Village, IL",  "lat": 42.0114,  "lng": -88.0021,  "match": ["ELK GROVE VILLAGE"]},
+    {"key": "ELKTON",          "name": "Elkton, MD",              "lat": 39.6068,  "lng": -75.8333,  "match": ["ELKTON"]},
+    {"key": "ETOBICOKE",       "name": "Etobicoke, ON",           "lat": 43.6205,  "lng": -79.5132,  "match": ["ETOBICOKE"]},
+    {"key": "FORT_WORTH",      "name": "Fort Worth, TX",          "lat": 32.8602,  "lng": -97.3641,  "match": ["FORT WORTH"]},
+    {"key": "FRANKLIN",        "name": "Franklin, IN",            "lat": 39.4806,  "lng": -86.0550,  "match": ["FRANKLIN"]},
+    {"key": "GAINESVILLE",     "name": "Gainesville, FL",         "lat": 29.7430,  "lng": -82.3777,  "match": ["GAINESVILLE"]},
+    {"key": "GAYLORD",         "name": "Gaylord, MN",             "lat": 44.5544,  "lng": -94.2208,  "match": ["GAYLORD"]},
+    {"key": "GOLDEN_VALLEY",   "name": "Golden Valley, AZ",       "lat": 35.2233,  "lng": -114.2230, "match": ["GOLDEN VALLEY"]},
+    {"key": "HENDERSON",       "name": "Henderson, NC",           "lat": 36.3296,  "lng": -78.3992,  "match": ["HENDERSON"]},
+    {"key": "HOUSTON",         "name": "Houston, TX",             "lat": 29.7451,  "lng": -95.6195,  "match": ["HOUSTON"]},
+    {"key": "HUMBLE",          "name": "Humble, TX",              "lat": 29.9988,  "lng": -95.2622,  "match": ["HUMBLE"]},
+    {"key": "INGERSOLL",       "name": "Ingersoll, ON",           "lat": 43.0400,  "lng": -80.8830,  "match": ["INGERSOLL", "INGERSOL"]},
+    {"key": "KENNESAW",        "name": "Kennesaw, GA",            "lat": 34.0236,  "lng": -84.5956,  "match": ["KENNESAW"]},
+    {"key": "KENT",            "name": "Kent, WA",                "lat": 47.4106,  "lng": -122.1966, "match": ["KENT"]},
+    {"key": "LA_MIRADA",       "name": "La Mirada, CA",           "lat": 33.9046,  "lng": -118.0128, "match": ["LA MIRADA"]},
+    {"key": "LAKE_ZURICH",     "name": "Lake Zurich, IL",         "lat": 42.1970,  "lng": -88.0934,  "match": ["LAKE ZURICH"]},
+    {"key": "LANGLEY",         "name": "Langley, BC",             "lat": 49.1044,  "lng": -122.6604, "match": ["LANGLEY"]},
+    {"key": "LE_CENTER",       "name": "Le Center, MN",           "lat": 44.3894,  "lng": -93.7302,  "match": ["LE CENTER"]},
+    {"key": "LINCOLNSHIRE",    "name": "Lincolnshire, IL",        "lat": 42.1929,  "lng": -87.9286,  "match": ["LINCOLNSHIRE"]},
+    {"key": "LITHIA_SPRINGS",  "name": "Lithia Springs, GA",      "lat": 33.7584,  "lng": -84.6374,  "match": ["LITHIA SPRINGS"]},
+    {"key": "LONDON",          "name": "London, ON",              "lat": 42.9849,  "lng": -81.2453,  "match": ["LONDON"]},
+    {"key": "LUMBERTON",       "name": "Lumberton, NC",           "lat": 34.6182,  "lng": -79.0086,  "match": ["LUMBERTON"]},
+    {"key": "MANITOWOC",       "name": "Manitowoc, WI",           "lat": 44.0900,  "lng": -87.6600,  "match": ["MANITOWOC"]},
+    {"key": "MARKHAM",         "name": "Markham, ON",             "lat": 43.8561,  "lng": -79.3370,  "match": ["MARKHAM"]},
+    {"key": "MCALLEN",         "name": "McAllen, TX",             "lat": 26.1707,  "lng": -98.2541,  "match": ["MCALLEN"]},
+    {"key": "MILTON",          "name": "Milton, ON",              "lat": 43.5181,  "lng": -79.8801,  "match": ["MILTON"]},
+    {"key": "MISSISSAUGA",     "name": "Mississauga, ON",         "lat": 43.5890,  "lng": -79.6441,  "match": ["MISSISSAUGA"]},
+    {"key": "MODESTO",         "name": "Modesto, CA",             "lat": 37.6184,  "lng": -120.9934, "match": ["MODESTO"]},
+    {"key": "NASHVILLE",       "name": "Nashville, TN",           "lat": 36.1654,  "lng": -86.7822,  "match": ["NASHVILLE"]},
+    {"key": "NEENAH",          "name": "Neenah, WI",              "lat": 44.1858,  "lng": -88.4626,  "match": ["NEENAH"]},
+    {"key": "NEW_ORLEANS",     "name": "New Orleans, LA",         "lat": 29.9392,  "lng": -90.1963,  "match": ["NEW ORLEANS"]},
+    {"key": "NEWBURYPORT",     "name": "Newburyport, MA",         "lat": 42.8104,  "lng": -70.8893,  "match": ["NEWBURYPORT"]},
+    {"key": "OXNARD",          "name": "Oxnard, CA",              "lat": 34.2054,  "lng": -119.1681, "match": ["OXNARD"]},
+    {"key": "PASADENA",        "name": "Pasadena, TX",            "lat": 29.6344,  "lng": -95.0703,  "match": ["PASADENA"]},
+    {"key": "PAYSON",          "name": "Payson, UT",              "lat": 40.0436,  "lng": -111.7323, "match": ["PAYSON"]},
+    {"key": "PEMBROKE",        "name": "Pembroke, NC",            "lat": 34.6802,  "lng": -79.1950,  "match": ["PEMBROKE"]},
+    {"key": "PLYMOUTH",        "name": "Plymouth, MI",            "lat": 42.3714,  "lng": -83.4702,  "match": ["PLYMOUTH"]},
+    {"key": "PORT_COQUITLAM",  "name": "Port Coquitlam, BC",      "lat": 49.2628,  "lng": -122.7811, "match": ["PORT COQUITLAM"]},
+    {"key": "PORT_ORANGE",     "name": "Port Orange, FL",         "lat": 29.0849,  "lng": -81.0644,  "match": ["PORT ORANGE"]},
+    {"key": "PRINCEVILLE",     "name": "Princeville, IL",         "lat": 40.9298,  "lng": -89.7576,  "match": ["PRINCEVILLE"]},
+    {"key": "RIVERSIDE",       "name": "Riverside, CA",           "lat": 33.8881,  "lng": -117.2735, "match": ["RIVERSIDE"]},
+    {"key": "ROCHELLE",        "name": "Rochelle, IL",            "lat": 41.9239,  "lng": -89.0687,  "match": ["ROCHELLE"]},
+    {"key": "SAINT_JOSEPH",    "name": "Saint Joseph, MO",        "lat": 39.6924,  "lng": -94.9143,  "match": ["SAINT JOSEPH", "ST JOSEPH"]},
+    {"key": "SCARBOROUGH",     "name": "Scarborough, ON",         "lat": 43.7763,  "lng": -79.2318,  "match": ["SCARBOROUGH"]},
+    {"key": "SMYRNA",          "name": "Smyrna, GA",              "lat": 33.8598,  "lng": -84.5379,  "match": ["SMYRNA"]},
+    {"key": "ST_PAUL",         "name": "St. Paul, MN",            "lat": 44.9527,  "lng": -93.1021,  "match": ["ST PAUL", "SAINT PAUL"]},
+    {"key": "STOCKTON",        "name": "Stockton, CA",            "lat": 37.9435,  "lng": -121.1481, "match": ["STOCKTON"]},
+    {"key": "UNION_CITY",      "name": "Union City, CA",          "lat": 37.5952,  "lng": -122.0440, "match": ["UNION CITY"]},
+    {"key": "UPPER_MARLBORO",  "name": "Upper Marlboro, MD",      "lat": 38.8826,  "lng": -76.7646,  "match": ["UPPER MARLBORO"]},
+    {"key": "WESTFIELD",       "name": "Westfield, MA",           "lat": 42.1251,  "lng": -72.7495,  "match": ["WESTFIELD"]},
+    {"key": "WINTERS",         "name": "Winters, CA",             "lat": 38.5249,  "lng": -121.9708, "match": ["WINTERS"]},
+    {"key": "WINTHROP",        "name": "Winthrop, MN",            "lat": 44.5430,  "lng": -94.3664,  "match": ["WINTHROP"]},
+    {"key": "WOODBRIDGE",      "name": "Woodbridge, ON",          "lat": 43.7860,  "lng": -79.5930,  "match": ["WOODBRIDGE"]},
+    # Additional pick cities found in data but not in original DC list
+    {"key": "SURREY",          "name": "Surrey, BC",              "lat": 49.1913,  "lng": -122.8490, "match": ["SURREY"]},
+    {"key": "CEDAR_SPRINGS",   "name": "Cedar Springs, MI",       "lat": 43.2245,  "lng": -85.5508,  "match": ["CEDAR SPRINGS"]},
+    {"key": "LIGONIER",        "name": "Ligonier, IN",            "lat": 41.4650,  "lng": -85.4092,  "match": ["LIGONIER"]},
+    {"key": "WOODSTOCK",       "name": "Woodstock, ON",           "lat": 43.1308,  "lng": -80.7461,  "match": ["WOODSTOCK"]},
 ]
 
 def match_pick(value):
@@ -267,6 +340,11 @@ NEW_CSS = """<style>
     background:var(--accent); border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,.3); cursor:pointer; }
   .dr-note { font-size:11.5px; color:#9aa6b2; margin-top:8px; line-height:1.4; }
   .badge.pool { background:var(--pool); }
+  .badge2.ACCEPTED,.badge2.accepted { background:var(--accepted); }
+  .badge2.ACTIVE,.badge2.active     { background:var(--active); }
+  .badge2.TENDERED,.badge2.tendered { background:var(--tendered); }
+  .badge2.PENDING,.badge2.pending   { background:var(--pending); }
+  .badge2.POOL,.badge2.pool         { background:var(--pool); }
   .consol-origin { margin:12px 0; padding-bottom:10px; border-bottom:1px dashed #eef1f5; }
   .consol-lbl { font-weight:600; color:var(--ink); font-size:13px; margin-bottom:6px; }
   .consol-list { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:6px; }
@@ -308,13 +386,13 @@ PATCHES = [
     # --- CSS: POOL color variable + dot/popup-header colors ---
     ("root pool var",
      "--green:#2e7d32; --red:#c62828; --orange:#ef6c00;",
-     "--green:#2e7d32; --red:#c62828; --orange:#ef6c00; --pool:#1565c0;"),
+     "--green:#2e7d32; --red:#c62828; --orange:#ef6c00; --pool:#1565c0; --accepted:#2e7d32; --active:#1565c0; --tendered:#ef6c00; --pending:#c62828;"),
     ("legend dot pool",
      ".dot.green{background:var(--green)} .dot.red{background:var(--red)} .dot.orange{background:var(--orange)}",
-     ".dot.green{background:var(--green)} .dot.red{background:var(--red)} .dot.orange{background:var(--orange)} .dot.pool{background:var(--pool)}"),
+     ".dot.green{background:var(--green)} .dot.red{background:var(--red)} .dot.orange{background:var(--orange)} .dot.pool{background:var(--pool)} .dot.accepted{background:var(--accepted)} .dot.active{background:var(--active)} .dot.tendered{background:var(--tendered)} .dot.pending{background:var(--pending)}"),
     ("popup head pool",
      ".pop-head.green{background:var(--green)} .pop-head.red{background:var(--red)} .pop-head.orange{background:var(--orange)}",
-     ".pop-head.green{background:var(--green)} .pop-head.red{background:var(--red)} .pop-head.orange{background:var(--orange)} .pop-head.pool{background:var(--pool)}"),
+     ".pop-head.green{background:var(--green)} .pop-head.red{background:var(--red)} .pop-head.orange{background:var(--orange)} .pop-head.pool{background:var(--pool)} .pop-head.accepted{background:var(--accepted)} .pop-head.active{background:var(--active)} .pop-head.tendered{background:var(--tendered)} .pop-head.pending{background:var(--pending)}"),
 
     # (CSS + SheetJS are injected at </head> in main(), not here)
 
@@ -332,6 +410,10 @@ PATCHES = [
     <input id="search" type="search" placeholder="Search name, ZIP, reference #, TMS, load group..." autocomplete="off" />
     <div class="filters" id="status-filters">
       <button data-f="ALL" class="active">All</button>
+      <button data-f="ACCEPTED">Accepted</button>
+      <button data-f="ACTIVE">Active</button>
+      <button data-f="TENDERED">Tendered</button>
+      <button data-f="PENDING">Pending</button>
       <button data-f="PLANNED">Planned</button>
       <button data-f="UNPLANNED">Unplanned</button>
       <button data-f="POOL">Pool</button>
@@ -360,12 +442,12 @@ PATCHES = [
     # --- legend: add POOL row ---
     ("legend pool row",
      '      <div class="row"><span class="dot orange"></span> Mixed</div>',
-     '      <div class="row"><span class="dot orange"></span> Mixed</div>\n      <div class="row"><span class="dot pool"></span> Pool (PLANNEDORNO = POOL)</div>'),
+     '      <div class="row"><span class="dot orange"></span> Mixed</div>\n      <div class="row"><span class="dot accepted"></span> Accepted</div>\n      <div class="row"><span class="dot active"></span> Active</div>\n      <div class="row"><span class="dot tendered"></span> Tendered</div>\n      <div class="row"><span class="dot pending"></span> Pending</div>\n      <div class="row"><span class="dot pool"></span> Pool</div>'),
 
     # --- JS: COLORS add pool ---
     ('COLORS pool',
      'const COLORS = { green:"#2e7d32", red:"#c62828", orange:"#ef6c00" };',
-     'const COLORS = { green:"#2e7d32", red:"#c62828", orange:"#ef6c00", pool:"#1565c0" };'),
+     'const COLORS = { green:"#2e7d32", red:"#c62828", orange:"#ef6c00", pool:"#1565c0", accepted:"#2e7d32", active:"#1565c0", tendered:"#ef6c00", pending:"#c62828" };'),
 
     # --- JS: state vars ---
     ('state vars',
@@ -384,12 +466,10 @@ PATCHES = [
   if (hasP) return "green";
   return "red";
 }''',
-     '''function colorKeyForOrders(list){
+     '''const STATUS_COLOR = { PLANNED:"green", UNPLANNED:"red", POOL:"pool", ACCEPTED:"accepted", ACTIVE:"active", TENDERED:"tendered", PENDING:"pending" };
+function colorKeyForOrders(list){
   const set = new Set(list.map(o => o.status).filter(Boolean));
-  if (set.size === 1){
-    const s = [...set][0];
-    return s==="PLANNED" ? "green" : s==="UNPLANNED" ? "red" : s==="POOL" ? "pool" : "red";
-  }
+  if (set.size === 1){ const s=[...set][0]; return STATUS_COLOR[s] || "red"; }
   return set.size === 0 ? "red" : "orange";
 }'''),
 
@@ -448,7 +528,7 @@ PATCHES = [
     # --- JS: per-order status badge handles POOL ---
     ('badge pool color',
      'const badge = o.status==="PLANNED" ? "green" : (o.status==="UNPLANNED" ? "red" : "");',
-     'const badge = o.status==="PLANNED" ? "green" : (o.status==="UNPLANNED" ? "red" : (o.status==="POOL" ? "pool" : ""));'),
+     'const badge = STATUS_COLOR[o.status] || "";'),
 
     # --- JS: show how many shipments were combined into a grouped order ---
     ('combined count badge',
