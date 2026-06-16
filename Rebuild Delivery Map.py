@@ -59,9 +59,10 @@ def extract_sheetjs():
                 js = h[start + len("<script>"):end]
 
     if not js:
-        raise FileNotFoundError(
-            "SheetJS not found. Put 'Map Maker.html' back on the Desktop, or keep an existing "
-            "'DeliveryMap (all columns + filters).html' so the reader can be recovered from it.")
+        print("  WARNING: SheetJS not found — in-browser 'Load Data' button will be disabled.")
+        print("           (The map still works fully with its embedded data.)")
+        print("           To re-enable: place sheetjs.js in this folder and re-run.")
+        return ""  # map still works; only in-browser file picker is disabled
 
     with open(SHEETJS_CACHE, "w", encoding="utf-8") as f:
         f.write(js)
@@ -1298,8 +1299,10 @@ def main():
 
     # inject the SheetJS reader + new CSS at </head> (done last so the library can't shadow other anchors)
     if "</head>" in html:
-        print("Reading SheetJS from Map Maker.html...")
-        head_inject = "<script>" + extract_sheetjs() + "</script>\n" + NEW_CSS
+        print("Injecting SheetJS + CSS...")
+        sheetjs_js = extract_sheetjs()
+        sheetjs_tag = ("<script>" + sheetjs_js + "</script>\n") if sheetjs_js else ""
+        head_inject = sheetjs_tag + NEW_CSS
         html = html.replace("</head>", head_inject, 1)
     else:
         failures.append("</head> for SheetJS+CSS")
