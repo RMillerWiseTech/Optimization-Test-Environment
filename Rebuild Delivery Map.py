@@ -106,27 +106,27 @@ def extract_sheetjs():
     return js
 
 DEFAULT_PICKS = [
-    # ---- Dessert Holdings Operating Facilities ----
-    {"key": "ST_PAUL",         "name": "St Paul, MN",            "lat": 44.9537,  "lng": -93.0900,  "match": ["ST PAUL", "SAINT PAUL"], "group": "dh"},
-    {"key": "LE_CENTER",       "name": "Le Center, MN",          "lat": 44.3875,  "lng": -93.7302,  "match": ["LE CENTER"],             "group": "dh"},
-    {"key": "DELTA",           "name": "Delta, BC",               "lat": 49.0847,  "lng": -123.0587, "match": ["DELTA"],                 "group": "dh"},
-    {"key": "LONDON",          "name": "London, ON",              "lat": 42.9849,  "lng": -81.2453,  "match": ["LONDON"],                "group": "dh"},
-    {"key": "NEWBURYPORT",     "name": "Newburyport, MA",         "lat": 42.8104,  "lng": -70.8893,  "match": ["NEWBURYPORT"],           "group": "dh"},
+    # ---- Dessert Holdings Operating Facilities (alphabetical) ----
     {"key": "AURORA",          "name": "Aurora, CO",              "lat": 39.7393,  "lng": -104.863,  "match": ["AURORA"],                "group": "dh"},
-    {"key": "PEMBROKE",        "name": "Pembroke, NC",            "lat": 34.6802,  "lng": -79.1950,  "match": ["PEMBROKE"],              "group": "dh"},
+    {"key": "DELTA",           "name": "Delta, BC",               "lat": 49.0847,  "lng": -123.0587, "match": ["DELTA"],                 "group": "dh"},
     {"key": "HUMBLE",          "name": "Humble, TX",              "lat": 29.9988,  "lng": -95.2622,  "match": ["HUMBLE"],                "group": "dh"},
     {"key": "KENNESAW",        "name": "Kennesaw, GA",            "lat": 34.0236,  "lng": -84.5956,  "match": ["KENNESAW"],              "group": "dh"},
-    # ---- 3PL Facilities ----
-    {"key": "CALGARY",         "name": "Calgary, AB",             "lat": 51.0447,  "lng": -114.0719, "match": ["CALGARY"],               "group": "3pl"},
-    {"key": "SURREY",          "name": "Surrey, BC",              "lat": 49.1913,  "lng": -122.8490, "match": ["SURREY"],                "group": "3pl"},
-    {"key": "BRIGHTON",        "name": "Brighton, CO",            "lat": 39.9727,  "lng": -104.8104, "match": ["BRIGHTON"],              "group": "3pl"},
-    {"key": "GOLDEN_VALLEY",   "name": "Golden Valley, MN",       "lat": 44.9886,  "lng": -93.3694,  "match": ["GOLDEN VALLEY"],         "group": "3pl"},
-    {"key": "CARTHAGE",        "name": "Carthage, MO",            "lat": 37.1786,  "lng": -94.3140,  "match": ["CARTHAGE"],              "group": "3pl"},
+    {"key": "LE_CENTER",       "name": "Le Center, MN",          "lat": 44.3875,  "lng": -93.7302,  "match": ["LE CENTER"],             "group": "dh"},
+    {"key": "LONDON",          "name": "London, ON",              "lat": 42.9849,  "lng": -81.2453,  "match": ["LONDON"],                "group": "dh"},
+    {"key": "NEWBURYPORT",     "name": "Newburyport, MA",         "lat": 42.8104,  "lng": -70.8893,  "match": ["NEWBURYPORT"],           "group": "dh"},
+    {"key": "PEMBROKE",        "name": "Pembroke, NC",            "lat": 34.6802,  "lng": -79.1950,  "match": ["PEMBROKE"],              "group": "dh"},
+    {"key": "ST_PAUL",         "name": "St Paul, MN",            "lat": 44.9537,  "lng": -93.0900,  "match": ["ST PAUL", "SAINT PAUL"], "group": "dh"},
+    # ---- 3PL Facilities (alphabetical) ----
     {"key": "ATLANTA",         "name": "Atlanta, GA",             "lat": 33.7490,  "lng": -84.3880,  "match": ["ATLANTA"],               "group": "3pl"},
-    {"key": "SMYRNA",          "name": "Smyrna, GA",              "lat": 33.8840,  "lng": -84.5144,  "match": ["SMYRNA"],                "group": "3pl"},
-    {"key": "FRANKLIN",        "name": "Franklin, IN",            "lat": 39.4806,  "lng": -86.0544,  "match": ["FRANKLIN"],              "group": "3pl"},
     {"key": "BETHLEHEM",       "name": "Bethlehem, PA",           "lat": 40.5968,  "lng": -75.3762,  "match": ["BETHLEHEM"],             "group": "3pl"},
+    {"key": "BRIGHTON",        "name": "Brighton, CO",            "lat": 39.9727,  "lng": -104.8104, "match": ["BRIGHTON"],              "group": "3pl"},
+    {"key": "CALGARY",         "name": "Calgary, AB",             "lat": 51.0447,  "lng": -114.0719, "match": ["CALGARY"],               "group": "3pl"},
+    {"key": "CARTHAGE",        "name": "Carthage, MO",            "lat": 37.1786,  "lng": -94.3140,  "match": ["CARTHAGE"],              "group": "3pl"},
+    {"key": "FRANKLIN",        "name": "Franklin, IN",            "lat": 39.4806,  "lng": -86.0544,  "match": ["FRANKLIN"],              "group": "3pl"},
+    {"key": "GOLDEN_VALLEY",   "name": "Golden Valley, MN",       "lat": 44.9886,  "lng": -93.3694,  "match": ["GOLDEN VALLEY"],         "group": "3pl"},
     {"key": "INGERSOLL",       "name": "Ingersoll, ON",           "lat": 43.0393,  "lng": -80.8847,  "match": ["INGERSOLL", "INGERSOL"], "group": "3pl"},
+    {"key": "SMYRNA",          "name": "Smyrna, GA",              "lat": 33.8840,  "lng": -84.5144,  "match": ["SMYRNA"],                "group": "3pl"},
+    {"key": "SURREY",          "name": "Surrey, BC",              "lat": 49.1913,  "lng": -122.8490, "match": ["SURREY"],                "group": "3pl"},
 ]
 
 
@@ -455,6 +455,9 @@ NEW_CSS = """<style>
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
   .tms-banner .tms-locs { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; }
   .tms-banner .tms-locs .locrow { font-size:12.5px; color:#5a4a00; line-height:1.8; }
+  /* status filter buttons: wrap on narrow panels */
+  .filters { flex-wrap:wrap !important; }
+  .filters button { flex:0 1 auto; min-width:60px; }
   /* pick-location dropdown */
   .pick-dropdown { position:relative; display:inline-block; max-width:100%; }
   .pick-dd-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 12px; background:#fff; border:1px solid var(--line); border-radius:8px; font-size:13px; cursor:pointer; color:var(--ink); min-width:200px; max-width:100%; white-space:nowrap; }
