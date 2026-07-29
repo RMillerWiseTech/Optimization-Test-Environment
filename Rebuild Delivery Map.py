@@ -25,6 +25,36 @@ SRC_HTML   = os.path.join(BASE, "delivery map text.txt")                    # ba
 OUT_HTML   = os.path.join(BASE, "DeliveryMap (all columns + filters).html")  # the map this builds
 MAKER_HTML = os.path.join(BASE, "Map Maker.html")                           # optional; not needed (SheetJS is bundled)
 SHEETJS_CACHE = os.path.join(BASE, "sheetjs.js")                            # bundled SheetJS reader (keep this file)
+ZIP_COORDS    = os.path.join(BASE, "zip_coords.json")                       # US+CA ZIP/postal → lat,lng lookup table
+
+
+_zip_db = None
+def _load_zip_db():
+    global _zip_db
+    if _zip_db is not None:
+        return _zip_db
+    if not os.path.exists(ZIP_COORDS):
+        print("  WARNING: zip_coords.json not found — orders without lat/lng will be skipped.")
+        _zip_db = {}
+        return _zip_db
+    with open(ZIP_COORDS, "r", encoding="utf-8") as f:
+        _zip_db = json.load(f)
+    return _zip_db
+
+def _zip_to_coords(z):
+    """Return (lat, lng) for a ZIP/postal code, or None if not found."""
+    if not z:
+        return None
+    db = _load_zip_db()
+    # Try exact match first (handles Canadian "A1B 2C3" format)
+    key = str(z).strip()
+    if key in db:
+        c = db[key]; return (c[0], c[1])
+    # US: normalise to 5-digit (strip ZIP+4 suffix)
+    key5 = key.split("-")[0].strip().zfill(5)
+    if key5 in db:
+        c = db[key5]; return (c[0], c[1])
+    return None
 
 
 def extract_sheetjs():
@@ -257,16 +287,30 @@ def build_payload():
     # which header indices to EXCLUDE from the popup field table (lat/lng only)
     skip_fields = {i_lat, i_lng}
 
+    has_coords = (i_lat is not None and i_lng is not None)
+    if not has_coords:
+        print("  NOTE: no lat/lng columns — will geocode from ZIP codes using zip_coords.json")
+
     orders = []
     skipped = 0
     for row in rows[1:]:
         if not row or all(c is None or c == "" for c in row):
             continue
-        try:
-            lat = float(row[i_lat]); lng = float(row[i_lng])
-        except (TypeError, ValueError):
-            skipped += 1
-            continue
+        lat = lng = None
+        if has_coords:
+            try:
+                lat = float(row[i_lat]); lng = float(row[i_lng])
+            except (TypeError, ValueError):
+                pass
+        if lat is None or lng is None:
+            # Fall back to ZIP geocoding
+            z = str(row[i_zip]).strip() if i_zip is not None and row[i_zip] is not None else ""
+            coords = _zip_to_coords(z)
+            if coords:
+                lat, lng = coords
+            else:
+                skipped += 1
+                continue
 
         status = ""
         if i_stat is not None and row[i_stat] is not None:
