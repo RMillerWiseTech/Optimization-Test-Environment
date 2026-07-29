@@ -106,15 +106,27 @@ def extract_sheetjs():
     return js
 
 DEFAULT_PICKS = [
-    {"key": "ST_PAUL",         "name": "St Paul, MN",            "lat": 44.9537,  "lng": -93.0900,  "match": ["ST PAUL", "SAINT PAUL"]},
-    {"key": "LE_CENTER",       "name": "Le Center, MN",          "lat": 44.3875,  "lng": -93.7302,  "match": ["LE CENTER"]},
-    {"key": "DELTA",           "name": "Delta, BC",               "lat": 49.0847,  "lng": -123.0587, "match": ["DELTA"]},
-    {"key": "LONDON",          "name": "London, ON",              "lat": 42.9849,  "lng": -81.2453,  "match": ["LONDON"]},
-    {"key": "NEWBURYPORT",     "name": "Newburyport, MA",         "lat": 42.8104,  "lng": -70.8893,  "match": ["NEWBURYPORT"]},
-    {"key": "AURORA",          "name": "Aurora, CO",              "lat": 39.7393,  "lng": -104.863,  "match": ["AURORA"]},
-    {"key": "PEMBROKE",        "name": "Pembroke, NC",            "lat": 34.6802,  "lng": -79.1950,  "match": ["PEMBROKE"]},
-    {"key": "HUMBLE",          "name": "Humble, TX",              "lat": 29.9988,  "lng": -95.2622,  "match": ["HUMBLE"]},
-    {"key": "KENNESAW",        "name": "Kennesaw, GA",            "lat": 34.0236,  "lng": -84.5956,  "match": ["KENNESAW"]},
+    # ---- Dessert Holdings Operating Facilities ----
+    {"key": "ST_PAUL",         "name": "St Paul, MN",            "lat": 44.9537,  "lng": -93.0900,  "match": ["ST PAUL", "SAINT PAUL"], "group": "dh"},
+    {"key": "LE_CENTER",       "name": "Le Center, MN",          "lat": 44.3875,  "lng": -93.7302,  "match": ["LE CENTER"],             "group": "dh"},
+    {"key": "DELTA",           "name": "Delta, BC",               "lat": 49.0847,  "lng": -123.0587, "match": ["DELTA"],                 "group": "dh"},
+    {"key": "LONDON",          "name": "London, ON",              "lat": 42.9849,  "lng": -81.2453,  "match": ["LONDON"],                "group": "dh"},
+    {"key": "NEWBURYPORT",     "name": "Newburyport, MA",         "lat": 42.8104,  "lng": -70.8893,  "match": ["NEWBURYPORT"],           "group": "dh"},
+    {"key": "AURORA",          "name": "Aurora, CO",              "lat": 39.7393,  "lng": -104.863,  "match": ["AURORA"],                "group": "dh"},
+    {"key": "PEMBROKE",        "name": "Pembroke, NC",            "lat": 34.6802,  "lng": -79.1950,  "match": ["PEMBROKE"],              "group": "dh"},
+    {"key": "HUMBLE",          "name": "Humble, TX",              "lat": 29.9988,  "lng": -95.2622,  "match": ["HUMBLE"],                "group": "dh"},
+    {"key": "KENNESAW",        "name": "Kennesaw, GA",            "lat": 34.0236,  "lng": -84.5956,  "match": ["KENNESAW"],              "group": "dh"},
+    # ---- 3PL Facilities ----
+    {"key": "CALGARY",         "name": "Calgary, AB",             "lat": 51.0447,  "lng": -114.0719, "match": ["CALGARY"],               "group": "3pl"},
+    {"key": "SURREY",          "name": "Surrey, BC",              "lat": 49.1913,  "lng": -122.8490, "match": ["SURREY"],                "group": "3pl"},
+    {"key": "BRIGHTON",        "name": "Brighton, CO",            "lat": 39.9727,  "lng": -104.8104, "match": ["BRIGHTON"],              "group": "3pl"},
+    {"key": "GOLDEN_VALLEY",   "name": "Golden Valley, MN",       "lat": 44.9886,  "lng": -93.3694,  "match": ["GOLDEN VALLEY"],         "group": "3pl"},
+    {"key": "CARTHAGE",        "name": "Carthage, MO",            "lat": 37.1786,  "lng": -94.3140,  "match": ["CARTHAGE"],              "group": "3pl"},
+    {"key": "ATLANTA",         "name": "Atlanta, GA",             "lat": 33.7490,  "lng": -84.3880,  "match": ["ATLANTA"],               "group": "3pl"},
+    {"key": "SMYRNA",          "name": "Smyrna, GA",              "lat": 33.8840,  "lng": -84.5144,  "match": ["SMYRNA"],                "group": "3pl"},
+    {"key": "FRANKLIN",        "name": "Franklin, IN",            "lat": 39.4806,  "lng": -86.0544,  "match": ["FRANKLIN"],              "group": "3pl"},
+    {"key": "BETHLEHEM",       "name": "Bethlehem, PA",           "lat": 40.5968,  "lng": -75.3762,  "match": ["BETHLEHEM"],             "group": "3pl"},
+    {"key": "INGERSOLL",       "name": "Ingersoll, ON",           "lat": 43.0393,  "lng": -80.8847,  "match": ["INGERSOLL", "INGERSOL"], "group": "3pl"},
 ]
 
 
@@ -285,7 +297,7 @@ def build_payload():
     payload = {
         "updatedAt": datetime.fromtimestamp(mtime).strftime("%b %d, %Y %I:%M:%S %p"),
         "stale": False,
-        "picks": [{"key": p["key"], "name": p["name"], "lat": p["lat"], "lng": p["lng"]} for p in DEFAULT_PICKS],
+        "picks": [{"key": p["key"], "name": p["name"], "lat": p["lat"], "lng": p["lng"], "group": p.get("group", "dh")} for p in DEFAULT_PICKS],
         "palletThreshold": 16,
         "pollSeconds": 45,
         "tmsAvailable": i_tms is not None,
@@ -382,6 +394,7 @@ NEW_CSS = """<style>
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
   .tms-banner .tms-locs { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; }
   .tms-banner .tms-locs .locrow { font-size:12.5px; color:#5a4a00; line-height:1.8; }
+  .pick-group-label { font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
 </style>
 </head>"""
 
@@ -417,6 +430,20 @@ _osmLayer.addTo(map);
 L.control.layers({"Street map (OSM)":_osmLayer,"Satellite (Google)":_gSat,"Hybrid (Google)":_gHybrid},{},{position:"topright",collapsed:false}).addTo(map);'''),
 
     # (CSS + SheetJS are injected at </head> in main(), not here)
+
+    # --- body: split picktabs into two labelled groups ---
+    ("picktabs two groups",
+     """  <div class="section">
+    <h2>Pick Location (ship-from)</h2>
+    <div id="picktabs"></div>
+  </div>""",
+     """  <div class="section">
+    <h2>Pick Location (ship-from)</h2>
+    <div class="pick-group-label">Dessert Holdings Operating Facilities</div>
+    <div id="picktabs"></div>
+    <div class="pick-group-label" style="margin-top:8px">3PL Facilities</div>
+    <div id="picktabs-3pl"></div>
+  </div>"""),
 
     # --- body: status filters get id + POOL button; add Load Group + Date sections ---
     ("search + filters block",
@@ -535,47 +562,55 @@ function colorKeyForOrders(list){
   }
 }''',
      '''function buildTabs(){
-  const wrap = document.getElementById("picktabs");
-  wrap.innerHTML = "";
-  // "All" / "Clear" control
-  const allOn = (activePick === null);
-  const allBtn = document.createElement("button");
-  allBtn.className = "ptab" + (allOn ? " active" : "");
-  if (allOn) allBtn.style.background = "#334155"; else allBtn.style.background = "";
-  const totalCnt = Object.values(pickCounts).reduce((s,v)=>s+(typeof v==="number"?v:0), 0);
-  allBtn.innerHTML = 'All <span class="pcount">' + totalCnt + '</span>';
-  allBtn.title = allOn ? "Click to deselect all" : "Click to select all";
-  allBtn.addEventListener("click", () => { activePick = allOn ? new Set() : null; buildTabs(); applyFilters(true); });
-  wrap.appendChild(allBtn);
-  // One button per pick that has at least one order
-  for (const p of picks){
-    const cnt = pickCounts[p.key] || 0;
-    if (cnt === 0) continue;
-    const on = (activePick === null) || activePick.has(p.key);
-    const btn = document.createElement("button");
-    btn.className = "ptab" + (on ? " active" : "");
-    const col = pickColor(p.key);
-    btn.style.background = on ? col : "";
-    btn.innerHTML = '<span class="pdot" style="background:'+col+'"></span>' +
-                    esc(p.name.split(",")[0]) + ' <span class="pcount">'+cnt+'</span>';
-    btn.title = (on ? "Click to hide " : "Click to show ") + p.name;
-    btn.addEventListener("click", () => {
-      if (activePick === null){
-        // all on → deselect just this one (keep all others)
-        activePick = new Set(picks.filter(x=>(pickCounts[x.key]||0)>0 && x.key!==p.key).map(x=>x.key));
-      } else if (activePick.has(p.key)){
-        activePick = new Set([...activePick].filter(k=>k!==p.key));
-        if (activePick.size === 0) activePick = null;
-      } else {
-        activePick = new Set([...activePick, p.key]);
-        // if all DCs with orders are now selected, collapse back to null
-        const withOrders = picks.filter(x=>(pickCounts[x.key]||0)>0).map(x=>x.key);
-        if (withOrders.every(k=>activePick.has(k))) activePick = null;
-      }
-      buildTabs(); applyFilters(true);
-    });
-    wrap.appendChild(btn);
+  const withOrders = picks.filter(x=>(pickCounts[x.key]||0)>0).map(x=>x.key);
+  // Shared toggle logic for a single pick button
+  function _togglePick(key){
+    if (activePick === null){
+      activePick = new Set(withOrders.filter(k=>k!==key));
+    } else if (activePick.has(key)){
+      activePick = new Set([...activePick].filter(k=>k!==key));
+      if (activePick.size === 0) activePick = null;
+    } else {
+      activePick = new Set([...activePick, key]);
+      if (withOrders.every(k=>activePick.has(k))) activePick = null;
+    }
+    buildTabs(); applyFilters(true);
   }
+  // Render one group section into a container div
+  function _renderGroup(wrap, groupPicks){
+    wrap.innerHTML = "";
+    for (const p of groupPicks){
+      const cnt = pickCounts[p.key] || 0;
+      if (cnt === 0) continue;
+      const on = (activePick === null) || activePick.has(p.key);
+      const btn = document.createElement("button");
+      btn.className = "ptab" + (on ? " active" : "");
+      const col = pickColor(p.key);
+      btn.style.background = on ? col : "";
+      btn.innerHTML = '<span class="pdot" style="background:'+col+'"></span>' +
+                      esc(p.name.split(",")[0]) + ' <span class="pcount">'+cnt+'</span>';
+      btn.title = (on ? "Click to hide " : "Click to show ") + p.name;
+      btn.addEventListener("click", () => _togglePick(p.key));
+      wrap.appendChild(btn);
+    }
+  }
+  // "All" / "Clear" button
+  const wrap = document.getElementById("picktabs");
+  if (wrap){
+    wrap.innerHTML = "";
+    const allOn = (activePick === null);
+    const allBtn = document.createElement("button");
+    allBtn.className = "ptab" + (allOn ? " active" : "");
+    if (allOn) allBtn.style.background = "#334155"; else allBtn.style.background = "";
+    const totalCnt = Object.values(pickCounts).reduce((s,v)=>s+(typeof v==="number"?v:0), 0);
+    allBtn.innerHTML = 'All <span class="pcount">' + totalCnt + '</span>';
+    allBtn.title = allOn ? "Click to deselect all" : "Click to select all";
+    allBtn.addEventListener("click", () => { activePick = allOn ? new Set() : null; buildTabs(); applyFilters(true); });
+    wrap.appendChild(allBtn);
+    _renderGroup(wrap, picks.filter(p=>p.group==="dh"||!p.group));
+  }
+  const wrap3pl = document.getElementById("picktabs-3pl");
+  if (wrap3pl) _renderGroup(wrap3pl, picks.filter(p=>p.group==="3pl"));
 }'''),
 
     # --- JS: result count supports multi-select pick ---
