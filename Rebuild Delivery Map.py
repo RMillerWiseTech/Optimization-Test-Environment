@@ -184,6 +184,43 @@ def open_wb(path):
     shutil.copy2(path, tmp)
     return openpyxl.load_workbook(tmp, data_only=True, read_only=True)
 
+# ---------------------------------------------------------------------------
+# EXCLUSION RULES — edit these to control what gets filtered out of the map
+# ---------------------------------------------------------------------------
+
+# Carrier SCACs whose loads are excluded entirely
+EXCLUDE_SCACS = {"2ACC", "1TOC"}
+
+# Southeastern US ZIP ranges (by state) — used for Walmart exclusion rule 2
+_SE_ZIP_RANGES = [
+    (35000, 36999),   # AL
+    (71600, 72999),   # AR
+    (32000, 34999),   # FL
+    (30000, 31999),   # GA
+    (40000, 42799),   # KY
+    (70000, 71599),   # LA
+    (38600, 39799),   # MS
+    (27000, 28999),   # NC
+    (29000, 29999),   # SC
+    (37000, 38599),   # TN
+    (20100, 24699),   # VA
+    (24700, 26899),   # WV
+]
+
+def _is_walmart(name):
+    """True for US Walmart DCs (excludes Walmart Canada)."""
+    up = str(name or "").upper()
+    return ("WAL-MART" in up or "WAL MART" in up or "WALMART" in up) and "CANADA" not in up
+
+def _is_southeast_us(zip_str):
+    """True if the ZIP code falls in a southeastern US state."""
+    try:
+        z = int(str(zip_str or "").strip().split("-")[0][:5].zfill(5))
+        return any(lo <= z <= hi for lo, hi in _SE_ZIP_RANGES)
+    except (ValueError, TypeError):
+        return False
+
+
 def build_payload():
     wb = open_wb(SRC_XLSX)
     ws = wb["Orders"] if "Orders" in wb.sheetnames else wb[wb.sheetnames[0]]
@@ -228,15 +265,21 @@ def build_payload():
     i_pkdt  = col("First Pick Appt Date Start")
     i_lat   = col("lat")
     i_lng   = col("lng")
+    i_scac  = col("SCAC", "Carrier SCAC", "Carrier Code", "SCAC Code", "Carrier")
     # which header indices to EXCLUDE from the popup field table (lat/lng only)
     skip_fields = {i_lat, i_lng}
 
     has_coords = (i_lat is not None and i_lng is not None)
     if not has_coords:
         print("  NOTE: no lat/lng columns — will geocode from ZIP codes using zip_coords.json")
+    if i_scac is not None:
+        print(f"  NOTE: SCAC column found — will exclude carriers: {', '.join(sorted(EXCLUDE_SCACS))}")
+    else:
+        print(f"  NOTE: no SCAC column found — SCAC exclusions ({', '.join(sorted(EXCLUDE_SCACS))}) will apply when column is added")
 
     orders = []
     skipped = 0
+    excluded = 0
     for row in rows[1:]:
         if not row or all(c is None or c == "" for c in row):
             continue
@@ -255,6 +298,24 @@ def build_payload():
             else:
                 skipped += 1
                 continue
+
+        # --- Exclusion rules ---
+        dest_name = str(row[i_name]).strip() if i_name is not None and row[i_name] is not None else ""
+        dest_zip  = str(row[i_zip]).strip()  if i_zip  is not None and row[i_zip]  is not None else ""
+        pick_city = str(row[i_pick]).strip().upper() if i_pick is not None and row[i_pick] is not None else ""
+
+        # Rule 1: Atlanta → any US Walmart
+        if pick_city == "ATLANTA" and _is_walmart(dest_name):
+            excluded += 1; continue
+
+        # Rule 2: Any US Walmart in a southeastern US state (any origin)
+        if _is_walmart(dest_name) and _is_southeast_us(dest_zip):
+            excluded += 1; continue
+
+        # Rule 3: Carrier SCAC on the exclude list (applies when SCAC column is present)
+        if i_scac is not None and row[i_scac] is not None:
+            if str(row[i_scac]).strip().upper() in EXCLUDE_SCACS:
+                excluded += 1; continue
 
         status = ""
         if i_stat is not None and row[i_stat] is not None:
@@ -304,7 +365,7 @@ def build_payload():
         "pickAvailable": i_pick is not None,
         "orders": orders,
     }
-    print(f"  built {len(orders)} orders ({skipped} skipped for missing coords)")
+    print(f"  built {len(orders)} orders ({skipped} skipped for missing coords, {excluded} excluded by rules)")
     return payload
 
 # ---------------------------------------------------------------- HTML patches
