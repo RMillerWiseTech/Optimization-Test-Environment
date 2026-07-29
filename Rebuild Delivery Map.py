@@ -119,6 +119,7 @@ DEFAULT_PICKS = [
     # ---- 3PL Facilities (alphabetical) ----
     {"key": "ATLANTA",         "name": "Atlanta, GA",             "lat": 33.7490,  "lng": -84.3880,  "match": ["ATLANTA"],               "group": "3pl"},
     {"key": "BETHLEHEM",       "name": "Bethlehem, PA",           "lat": 40.5968,  "lng": -75.3762,  "match": ["BETHLEHEM"],             "group": "3pl"},
+    {"key": "BOLINGBROOK",     "name": "Bolingbrook, IL",         "lat": 41.6986,  "lng": -88.0684,  "match": ["BOLINGBROOK"],           "group": "3pl"},
     {"key": "BRIGHTON",        "name": "Brighton, CO",            "lat": 39.9727,  "lng": -104.8104, "match": ["BRIGHTON"],              "group": "3pl"},
     {"key": "CALGARY",         "name": "Calgary, AB",             "lat": 51.0447,  "lng": -114.0719, "match": ["CALGARY"],               "group": "3pl"},
     {"key": "CARTHAGE",        "name": "Carthage, MO",            "lat": 37.1786,  "lng": -94.3140,  "match": ["CARTHAGE"],              "group": "3pl"},
