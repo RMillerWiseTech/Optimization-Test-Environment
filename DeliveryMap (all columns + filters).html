@@ -1039,7 +1039,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
   .tms-banner .tms-locs { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; }
   .tms-banner .tms-locs .locrow { font-size:12.5px; color:#5a4a00; line-height:1.8; }
-  .pick-group-label { font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  /* pick-location dropdown */
+  .pick-dropdown { position:relative; display:inline-block; max-width:100%; }
+  .pick-dd-btn { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 12px; background:#fff; border:1px solid var(--line); border-radius:8px; font-size:13px; cursor:pointer; color:var(--ink); min-width:200px; max-width:100%; white-space:nowrap; }
+  .pick-dd-btn:hover { border-color:var(--accent); }
+  .pick-dd-btn.open { border-color:var(--accent); box-shadow:0 0 0 2px rgba(59,130,246,.15); }
+  .dd-arrow { font-size:10px; color:var(--muted); margin-left:4px; }
+  .pick-dd-panel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:2000; background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.13); min-width:250px; max-height:400px; overflow-y:auto; padding:6px 0; }
+  .pick-dd-item { display:flex; align-items:center; gap:7px; padding:6px 14px; cursor:pointer; user-select:none; font-size:13px; }
+  .pick-dd-item:hover { background:#f0f4f9; }
+  .pick-dd-item input[type=checkbox] { flex-shrink:0; cursor:pointer; width:14px; height:14px; }
+  .pick-dd-all { font-weight:600; border-bottom:1px solid var(--line); margin-bottom:2px; padding-bottom:8px; }
+  .pick-group-label { padding:8px 14px 3px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -1067,10 +1078,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   <div class="section">
     <h2>Pick Location (ship-from)</h2>
-    <div class="pick-group-label">Dessert Holdings Operating Facilities</div>
-    <div id="picktabs"></div>
-    <div class="pick-group-label" style="margin-top:8px">3PL Facilities</div>
-    <div id="picktabs-3pl"></div>
+    <div class="pick-dropdown" id="pick-dropdown">
+      <button class="pick-dd-btn" id="pick-dd-btn" type="button">Select pick locations <span class="dd-arrow">&#9660;</span></button>
+      <div class="pick-dd-panel" id="pick-dd-panel"></div>
+    </div>
   </div>
 
   <div class="stats">
@@ -1278,7 +1289,7 @@ map.addLayer(cluster);
 let DATA = null, groups = [], markerRecs = [];
 let picks = [], pickByKey = new Map(), pickCounts = {};
 let tmsIndex = new Map();
-let activePick = null, activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;
+let activePick = new Set(), activeStatus = "ALL", query = "", smallOnly = false, threshold = 16;
 let activeLoadGroup = "ALL", loadGroups = [], lgCounts = {};
 let dateMin = null, dateMax = null, dateFrom = null, dateTo = null, sliderInit = false;
 let loadsSortKey = "", loadsSortDir = 1, loadsDC = "";
@@ -1370,55 +1381,97 @@ function ingest(data){
 }
 
 function buildTabs(){
+  const btn = document.getElementById("pick-dd-btn");
+  const panel = document.getElementById("pick-dd-panel");
+  if (!btn || !panel) return;
+
   const withOrders = picks.filter(x=>(pickCounts[x.key]||0)>0).map(x=>x.key);
-  // Shared toggle logic for a single pick button
+
+  // Wire open/close once
+  if (!btn._ddWired){
+    btn._ddWired = true;
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const open = panel.style.display === "block";
+      panel.style.display = open ? "none" : "block";
+      btn.classList.toggle("open", !open);
+    });
+    document.addEventListener("click", e => {
+      if (!e.target.closest("#pick-dropdown")){
+        panel.style.display = "none"; btn.classList.remove("open");
+      }
+    });
+  }
+
+  // Update button label
+  if (activePick === null){
+    btn.innerHTML = 'All pick locations <span class="dd-arrow">&#9660;</span>';
+  } else if (activePick.size === 0){
+    btn.innerHTML = 'Select pick locations <span class="dd-arrow">&#9660;</span>';
+  } else {
+    const names = [...activePick].map(k=>(pickByKey.get(k)||{name:k}).name.split(",")[0]);
+    const label = names.length <= 2 ? names.join(", ") : names.length + " locations selected";
+    btn.innerHTML = esc(label) + ' <span class="dd-arrow">&#9660;</span>';
+  }
+
+  // Toggle logic
   function _togglePick(key){
     if (activePick === null){
       activePick = new Set(withOrders.filter(k=>k!==key));
     } else if (activePick.has(key)){
       activePick = new Set([...activePick].filter(k=>k!==key));
-      if (activePick.size === 0) activePick = null;
     } else {
       activePick = new Set([...activePick, key]);
       if (withOrders.every(k=>activePick.has(k))) activePick = null;
     }
     buildTabs(); applyFilters(true);
   }
-  // Render one group section into a container div
-  function _renderGroup(wrap, groupPicks){
-    wrap.innerHTML = "";
+
+  // Rebuild panel
+  panel.innerHTML = "";
+
+  // "All" row
+  const allItem = document.createElement("label");
+  allItem.className = "pick-dd-item pick-dd-all";
+  const allChk = document.createElement("input");
+  allChk.type = "checkbox";
+  allChk.checked = (activePick === null);
+  allChk.indeterminate = (activePick !== null && activePick.size > 0);
+  allChk.addEventListener("change", () => {
+    activePick = allChk.checked ? null : new Set();
+    buildTabs(); applyFilters(true);
+  });
+  const allLbl = document.createElement("span"); allLbl.textContent = "All locations";
+  allItem.appendChild(allChk); allItem.appendChild(allLbl);
+  panel.appendChild(allItem);
+
+  // One labelled group of checkboxes
+  function renderGroup(label, groupPicks){
+    if (!groupPicks.length) return;
+    const hdr = document.createElement("div");
+    hdr.className = "pick-group-label"; hdr.textContent = label;
+    panel.appendChild(hdr);
     for (const p of groupPicks){
       const cnt = pickCounts[p.key] || 0;
-      if (cnt === 0) continue;
       const on = (activePick === null) || activePick.has(p.key);
-      const btn = document.createElement("button");
-      btn.className = "ptab" + (on ? " active" : "");
-      const col = pickColor(p.key);
-      btn.style.background = on ? col : "";
-      btn.innerHTML = '<span class="pdot" style="background:'+col+'"></span>' +
-                      esc(p.name.split(",")[0]) + ' <span class="pcount">'+cnt+'</span>';
-      btn.title = (on ? "Click to hide " : "Click to show ") + p.name;
-      btn.addEventListener("click", () => _togglePick(p.key));
-      wrap.appendChild(btn);
+      const item = document.createElement("label");
+      item.className = "pick-dd-item";
+      const chk = document.createElement("input"); chk.type = "checkbox"; chk.checked = on;
+      const dot = document.createElement("span");
+      dot.className = "pdot"; dot.style.cssText = "background:"+pickColor(p.key)+";flex-shrink:0";
+      const nm = document.createElement("span"); nm.textContent = p.name.split(",")[0];
+      const ct = document.createElement("span"); ct.className = "pcount"; ct.textContent = cnt;
+      item.appendChild(chk); item.appendChild(dot); item.appendChild(nm); item.appendChild(ct);
+      const key = p.key;
+      chk.addEventListener("change", ()=>_togglePick(key));
+      panel.appendChild(item);
     }
   }
-  // "All" / "Clear" button
-  const wrap = document.getElementById("picktabs");
-  if (wrap){
-    wrap.innerHTML = "";
-    const allOn = (activePick === null);
-    const allBtn = document.createElement("button");
-    allBtn.className = "ptab" + (allOn ? " active" : "");
-    if (allOn) allBtn.style.background = "#334155"; else allBtn.style.background = "";
-    const totalCnt = Object.values(pickCounts).reduce((s,v)=>s+(typeof v==="number"?v:0), 0);
-    allBtn.innerHTML = 'All <span class="pcount">' + totalCnt + '</span>';
-    allBtn.title = allOn ? "Click to deselect all" : "Click to select all";
-    allBtn.addEventListener("click", () => { activePick = allOn ? new Set() : null; buildTabs(); applyFilters(true); });
-    wrap.appendChild(allBtn);
-    _renderGroup(wrap, picks.filter(p=>p.group==="dh"||!p.group));
-  }
-  const wrap3pl = document.getElementById("picktabs-3pl");
-  if (wrap3pl) _renderGroup(wrap3pl, picks.filter(p=>p.group==="3pl"));
+
+  renderGroup("Dessert Holdings Operating Facilities",
+    picks.filter(p=>(p.group==="dh"||!p.group)&&(pickCounts[p.key]||0)>0));
+  renderGroup("3PL Facilities",
+    picks.filter(p=>p.group==="3pl"&&(pickCounts[p.key]||0)>0));
 }
 
 function buildLoadGroups(){
@@ -1920,7 +1973,7 @@ function applyFilters(fit){
   document.getElementById("s-unplanned").textContent = unplanned.toLocaleString();
   document.getElementById("result-count").textContent =
     layers.length+" of "+markerRecs.length+" drop locations" +
-    (activePick!==null ? " · " + [...activePick].map(k=>(pickByKey.get(k)||{}).name||k).join(", ") : "");
+    (activePick!==null && activePick.size>0 ? " · " + [...activePick].map(k=>(pickByKey.get(k)||{}).name||k).join(", ") : "");
 
   drawOriginMarkers(originsToShow);
   if (originLines._map) drawOriginLines();
