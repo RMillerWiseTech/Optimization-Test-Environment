@@ -766,13 +766,12 @@ function colorKeyForOrders(list){
       '<div class="pop-title">'+esc(p.name)+'</div>' +
       '<div class="pop-meta">Pick location &middot; ships '+cnt+' orders</div></div>' +
       '<div style="padding:10px 14px 6px">' +
-      '<button onclick="_pickPinClick(\''+k+'\')" style="width:100%;padding:7px;background:'+col+';color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:13px">' +
+      '<button onclick="javascript:_pickPinClick(this.dataset.k)" data-k="'+k+'" style="width:100%;padding:7px;background:'+col+';color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:13px">' +
       (isActive && activePick !== null ? '&#10005; Deselect location' : '&#10003; Filter to this location') +
       '</button></div></div>',
       {maxWidth:300}
     );
     mk.bindTooltip(p.name + ' — click to filter', {direction:"top"});
-    mk.on("click", () => _pickPinClick(k));
     originMarkers.addLayer(mk);
   });
 }
