@@ -1991,15 +1991,41 @@ function applyFilters(fit){
 function drawOriginMarkers(keys){
   originMarkers.clearLayers();
   const show = (activePick === null) ? keys : new Set([...activePick].filter(k => keys.has(k)));
-  show.forEach(k => {
+  keys.forEach(k => {
     const p = pickByKey.get(k); if (!p) return;
-    const mk = L.marker([p.lat,p.lng], { icon:originPinIcon(pickColor(k)), zIndexOffset:1000 });
-    mk.bindPopup('<div class="pop"><div class="pop-head" style="background:'+pickColor(k)+'">'+
-      '<div class="pop-title">'+esc(p.name)+'</div><div class="pop-meta">Pick location &middot; ships '+
-      (pickCounts[k]||0)+' orders</div></div></div>', {maxWidth:300});
-    mk.bindTooltip(p.name, {direction:"top"});
+    const isActive = activePick === null || activePick.has(k);
+    const col = pickColor(k);
+    const mk = L.marker([p.lat,p.lng], { icon:originPinIcon(col), zIndexOffset:1000, opacity: isActive ? 1 : 0.35 });
+    const cnt = pickCounts[k]||0;
+    mk.bindPopup(
+      '<div class="pop"><div class="pop-head" style="background:'+col+'">' +
+      '<div class="pop-title">'+esc(p.name)+'</div>' +
+      '<div class="pop-meta">Pick location &middot; ships '+cnt+' orders</div></div>' +
+      '<div style="padding:10px 14px 6px">' +
+      '<button onclick="_pickPinClick(''+k+'')" style="width:100%;padding:7px;background:'+col+';color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600;font-size:13px">' +
+      (isActive && activePick !== null ? '&#10005; Deselect location' : '&#10003; Filter to this location') +
+      '</button></div></div>',
+      {maxWidth:300}
+    );
+    mk.bindTooltip(p.name + ' — click to filter', {direction:"top"});
+    mk.on("click", () => _pickPinClick(k));
     originMarkers.addLayer(mk);
   });
+}
+function _pickPinClick(k){
+  if (activePick === null){
+    // currently showing all — select only this one
+    activePick = new Set([k]);
+  } else if (activePick.has(k) && activePick.size === 1){
+    // only one selected and it's this one — deselect (show all)
+    activePick = null;
+  } else {
+    // toggle this key in the set
+    activePick = new Set([...activePick]);
+    activePick.has(k) ? activePick.delete(k) : activePick.add(k);
+    if (activePick.size === 0) activePick = new Set(); // keep as "nothing"
+  }
+  buildTabs(); applyFilters(true);
 }
 
 function drawOriginLines(){
