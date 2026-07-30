@@ -442,6 +442,7 @@ def build_payload():
     i_pe    = col("Last Drop Plan Date End")
     i_name  = col("Last Drop Name")
     i_zip   = col("Last Drop Postal Code")
+    i_city  = col("Drop Location City")
     i_wt    = col("Weight (lb)")
     i_pal   = col("Pallet Spaces")
     i_plt   = col("Pallets")
@@ -541,6 +542,7 @@ def build_payload():
             "lat": lat, "lng": lng, "status": status,
             "name": str(row[i_name]) if i_name is not None and row[i_name] is not None else "",
             "zip": str(row[i_zip]) if i_zip is not None and row[i_zip] is not None else "",
+            "dropCity": str(row[i_city]).strip().upper() if i_city is not None and row[i_city] is not None else "",
             "palletSpaces": to_number(row[i_pal]) if i_pal is not None else None,
             "pallets": to_number(row[i_plt]) if i_plt is not None else None,
             "weight": to_number(row[i_wt]) if i_wt is not None else None,
@@ -1510,10 +1512,11 @@ function renderLoads(){'''),
         '<td class="num">'+g.fill+'%</td>'+
         '<td>'+esc(g.windowText)+'</td><td class="st '+g.st+'">'+esc(g.statusText)+'</td></tr>';
       html+='<tr class="detail" style="display:none"><td colspan="8">'+loadList(g.orders)+'</td></tr>';''',
-     '''const _dLat = g.orders.length ? g.orders[0].lat : null;
-      const _dLng = g.orders.length ? g.orders[0].lng : null;
+     '''const _dLat  = g.orders.length ? g.orders[0].lat : null;
+      const _dLng  = g.orders.length ? g.orders[0].lng : null;
+      const _dCity = g.orders.length ? (g.orders[0].dropCity||'') : '';
       const _rateCell = (DATA.rates && Object.keys(DATA.rates).length && dc!=="__none")
-        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip, _dLat, _dLng)+'</td>' : '<td></td>';
+        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip, _dLat, _dLng, _dCity)+'</td>' : '<td></td>';
       html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
         '<td class="num">'+g.n+'</td><td class="num">'+Math.round(g.weight).toLocaleString()+'</td>'+
         '<td class="num">'+(Math.round(g.pallets*10)/10).toLocaleString()+'</td>'+
@@ -1577,7 +1580,7 @@ function _haverMi(lat1,lng1,lat2,lng2){
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLng/2)**2;
   return R*2*Math.asin(Math.sqrt(a));
 }
-function getBestRates(pickKey, dropZip, dropLat, dropLng){
+function getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity){
   const ratesDB = (DATA.rates)||{};
   const pick = pickByKey.get(pickKey); if(!pick) return [];
   const origCity = pick.name.split(',')[0].trim().toUpperCase();
@@ -1586,6 +1589,7 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng){
   const st = zipToState(dropZip);
   if(!st) return [];
   const lane = laneSt[st] || {};
+  const dropCityUp = (dropCity||'').trim().toUpperCase();
 
   // Estimate road miles (haversine × 1.3 road factor) if we have coords
   const haveDist = (dropLat!=null && dropLng!=null);
@@ -1610,9 +1614,10 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng){
                sortKey: estCost!=null ? estCost : (e.b==='CPM' ? e.r*500 : e.r) });
   }
 
-  // LTL entries — min_cost is the floor charge; label as "from $X"
+  // LTL entries — exact city match required; min_cost is the floor charge
   for(const e of (lane.ltl||[])){
     if(!e.m || e.m<=0) continue;
+    if(dropCityUp && e.dc && e.dc.toUpperCase()!==dropCityUp) continue;  // exact city only
     const cur = e.cy==='CAD'?'C$':'$';
     const display = cur+Math.round(e.m).toLocaleString()+' min';
     all.push({ carrier:e.c, mode:'LTL', basis:e.b, estCost:e.m, display, currency:e.cy,
@@ -1627,13 +1632,13 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng){
   }
   return [...seen.values()].sort((a,b)=>a.sortKey-b.sortKey).slice(0,5);
 }
-function ratesBadge(pickKey, dropZip, dropLat, dropLng){
-  const rates = getBestRates(pickKey, dropZip, dropLat, dropLng);
+function ratesBadge(pickKey, dropZip, dropLat, dropLng, dropCity){
+  const rates = getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity);
   if(!rates.length) return '<span style="color:#aaa;font-size:11px">—</span>';
   const bestTL  = rates.find(r=>r.mode==='TL');
   const bestLTL = rates.find(r=>r.mode==='LTL');
-  function line(r){
-    if(!r) return '<span style="color:#bbb;font-size:11px">—</span>';
+  function line(r, mode){
+    if(!r) return '<span style="color:#999;font-size:10.5px;font-style:italic">No '+mode+' results</span>';
     const col = r.mode==='LTL'?'#7c3aed':'#1d4ed8';
     const badge = '<span style="background:'+col+';color:#fff;border-radius:3px;padding:0px 5px;font-size:10px;font-weight:700;margin-right:4px">'+r.mode+'</span>';
     const note = r.mode==='LTL' ? ' (min)' : (r.basis==='CPM' ? ' (est.)' : '');
@@ -1641,8 +1646,8 @@ function ratesBadge(pickKey, dropZip, dropLat, dropLng){
   }
   const allTip = rates.map(r=>'['+r.mode+'] '+r.carrier+': '+r.display).join('\\n');
   return '<span class="rate-badge" title="'+esc(allTip)+'" style="display:inline-flex;flex-direction:column;gap:2px;padding:3px 7px">'+
-    '<span>'+line(bestLTL)+'</span>'+
-    '<span>'+line(bestTL)+'</span>'+
+    '<span>'+line(bestLTL,'LTL')+'</span>'+
+    '<span>'+line(bestTL,'TL')+'</span>'+
   '</span>';
 }
 function buildLoadGroups(){
@@ -2036,9 +2041,10 @@ function findConsolidationMatches(tms){
       const winStr = (m.cWs!=null&&m.cWe!=null) ? _fd(m.cWs)+(m.cWs!==m.cWe?' – '+_fd(m.cWe):'') : '—';
       // Get representative ZIP from this match's orders for rate lookup
       const repOrder = m.orders.find(o=>o.zip) || mine.find(o=>o.zip) || {};
-      const repZip = repOrder.zip || null;
-      const repLat = repOrder.lat || null; const repLng = repOrder.lng || null;
-      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip, repLat, repLng)+'</td>' : '';
+      const repZip  = repOrder.zip || null;
+      const repLat  = repOrder.lat || null; const repLng = repOrder.lng || null;
+      const repCity = repOrder.dropCity || null;
+      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip, repLat, repLng, repCity)+'</td>' : '';
       rh += '<tr><td><span class="tms-chip" data-tms="'+esc(m.tms)+'">'+esc(m.tms)+'</span></td>'+
             '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
             '<td style="text-align:right;white-space:nowrap">'+Math.round(m.wt).toLocaleString()+' lb</td>'+
