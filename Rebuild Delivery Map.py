@@ -1633,12 +1633,12 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity){
   return [...seen.values()].sort((a,b)=>a.sortKey-b.sortKey).slice(0,5);
 }
 function ratesBadge(pickKey, dropZip, dropLat, dropLng, dropCity, totalPallets){
-  const ltlEligible = !(totalPallets > 12);
+  const ltlEligible = !(totalPallets > 10);
   const rates = getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity);
   if(!rates.length) return '<span style="color:#aaa;font-size:11px">—</span>';
   const bestTL  = rates.find(r=>r.mode==='TL');
   const bestLTL = ltlEligible ? rates.find(r=>r.mode==='LTL') : null;
-  const ltlLine = ltlEligible ? line(bestLTL,'LTL') : '<span style="color:#999;font-size:10.5px;font-style:italic">LTL: &gt;12 pallets</span>';
+  const ltlLine = ltlEligible ? line(bestLTL,'LTL') : '<span style="color:#999;font-size:10.5px;font-style:italic">LTL: &gt;10 pallets</span>';
   function line(r, mode){
     if(!r) return '<span style="color:#999;font-size:10.5px;font-style:italic">No '+mode+' results</span>';
     const col = r.mode==='LTL'?'#7c3aed':'#1d4ed8';
