@@ -1459,6 +1459,27 @@ function renderLoads(){'''),
      '''      '<div class="dc-banner tms-banner" style="display:none"></div>'+
       '<table class="lt"><thead>'+loadsHeader()+'</thead><tbody>';'''),
 
+    # --- Loads by DC: add Best Rate column to header and destination rows ---
+    ('loads rate column header',
+     'const cols=[["name","Destination",""],["zip","ZIP",""],["n","Loads","num"],["weight","Weight (lb)","num"],["pallets","Pallet Spaces","num"],["fill","Truck %","num"],["window","Delivery window",""],["st","Ship together?",""]];',
+     'const cols=[["name","Destination",""],["zip","ZIP",""],["n","Loads","num"],["weight","Weight (lb)","num"],["pallets","Pallet Spaces","num"],["fill","Truck %","num"],["window","Delivery window",""],["st","Ship together?",""],["rate","Best rate",""]];'),
+
+    ('loads rate column row',
+     '''html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
+        '<td class="num">'+g.n+'</td><td class="num">'+Math.round(g.weight).toLocaleString()+'</td>'+
+        '<td class="num">'+(Math.round(g.pallets*10)/10).toLocaleString()+'</td>'+
+        '<td class="num">'+g.fill+'%</td>'+
+        '<td>'+esc(g.windowText)+'</td><td class="st '+g.st+'">'+esc(g.statusText)+'</td></tr>';
+      html+='<tr class="detail" style="display:none"><td colspan="8">'+loadList(g.orders)+'</td></tr>';''',
+     '''const _rateCell = (DATA.rates && Object.keys(DATA.rates).length && dc!=="__none")
+        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip)+'</td>' : '<td></td>';
+      html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
+        '<td class="num">'+g.n+'</td><td class="num">'+Math.round(g.weight).toLocaleString()+'</td>'+
+        '<td class="num">'+(Math.round(g.pallets*10)/10).toLocaleString()+'</td>'+
+        '<td class="num">'+g.fill+'%</td>'+
+        '<td>'+esc(g.windowText)+'</td><td class="st '+g.st+'">'+esc(g.statusText)+'</td>'+_rateCell+'</tr>';
+      html+='<tr class="detail" style="display:none"><td colspan="9">'+loadList(g.orders)+'</td></tr>';'''),
+
     ('loads controls wiring',
      '''["c-greenonly","c-group"].forEach(id => {
   const el = document.getElementById(id); if (el) el.addEventListener("input", renderLoads);
