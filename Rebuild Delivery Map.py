@@ -1516,7 +1516,7 @@ function renderLoads(){'''),
       const _dLng  = g.orders.length ? g.orders[0].lng : null;
       const _dCity = g.orders.length ? (g.orders[0].dropCity||'') : '';
       const _rateCell = (DATA.rates && Object.keys(DATA.rates).length && dc!=="__none")
-        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip, _dLat, _dLng, _dCity)+'</td>' : '<td></td>';
+        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip, _dLat, _dLng, _dCity, g.pallets)+'</td>' : '<td></td>';
       html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
         '<td class="num">'+g.n+'</td><td class="num">'+Math.round(g.weight).toLocaleString()+'</td>'+
         '<td class="num">'+(Math.round(g.pallets*10)/10).toLocaleString()+'</td>'+
@@ -1632,11 +1632,13 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity){
   }
   return [...seen.values()].sort((a,b)=>a.sortKey-b.sortKey).slice(0,5);
 }
-function ratesBadge(pickKey, dropZip, dropLat, dropLng, dropCity){
+function ratesBadge(pickKey, dropZip, dropLat, dropLng, dropCity, totalPallets){
+  const ltlEligible = !(totalPallets > 12);
   const rates = getBestRates(pickKey, dropZip, dropLat, dropLng, dropCity);
   if(!rates.length) return '<span style="color:#aaa;font-size:11px">—</span>';
   const bestTL  = rates.find(r=>r.mode==='TL');
-  const bestLTL = rates.find(r=>r.mode==='LTL');
+  const bestLTL = ltlEligible ? rates.find(r=>r.mode==='LTL') : null;
+  const ltlLine = ltlEligible ? line(bestLTL,'LTL') : '<span style="color:#999;font-size:10.5px;font-style:italic">LTL: &gt;12 pallets</span>';
   function line(r, mode){
     if(!r) return '<span style="color:#999;font-size:10.5px;font-style:italic">No '+mode+' results</span>';
     const col = r.mode==='LTL'?'#7c3aed':'#1d4ed8';
@@ -1646,7 +1648,7 @@ function ratesBadge(pickKey, dropZip, dropLat, dropLng, dropCity){
   }
   const allTip = rates.map(r=>'['+r.mode+'] '+r.carrier+': '+r.display).join('\\n');
   return '<span class="rate-badge" title="'+esc(allTip)+'" style="display:inline-flex;flex-direction:column;gap:2px;padding:3px 7px">'+
-    '<span>'+line(bestLTL,'LTL')+'</span>'+
+    '<span>'+ltlLine+'</span>'+
     '<span>'+line(bestTL,'TL')+'</span>'+
   '</span>';
 }
@@ -2044,7 +2046,7 @@ function findConsolidationMatches(tms){
       const repZip  = repOrder.zip || null;
       const repLat  = repOrder.lat || null; const repLng = repOrder.lng || null;
       const repCity = repOrder.dropCity || null;
-      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip, repLat, repLng, repCity)+'</td>' : '';
+      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip, repLat, repLng, repCity, m.pal+myPal)+'</td>' : '';
       rh += '<tr><td><span class="tms-chip" data-tms="'+esc(m.tms)+'">'+esc(m.tms)+'</span></td>'+
             '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
             '<td style="text-align:right;white-space:nowrap">'+Math.round(m.wt).toLocaleString()+' lb</td>'+
