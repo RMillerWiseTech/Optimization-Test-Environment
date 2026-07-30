@@ -154,52 +154,91 @@ def build_rates_lookup():
     rows = list(ws.iter_rows(min_row=2, values_only=True))
 
     pick_cities = {p["match"][0].upper() for p in DEFAULT_PICKS}
-    # Also add ST PAUL alias
     pick_cities.add("ST PAUL")
 
     from collections import defaultdict
-    # raw: orig_city → dest_state → [(carrier, basis, rate, min_cost, currency)]
-    raw = defaultdict(lambda: defaultdict(list))
 
+    # ---- TL rates (CPM / FLT) ----
+    tl_raw = defaultdict(lambda: defaultdict(list))
     for r in rows:
         orig_city = str(r[18] or '').strip().upper()
         if orig_city not in pick_cities:
             continue
-        carrier  = str(r[3]  or '').strip().upper()
-        basis    = str(r[10] or '').strip().upper()  # CPM or FLT
-        rate_val = r[11] if r[11] is not None else 0
-        min_cost = r[12] if r[12] is not None else 0
-        currency = str(r[14] or 'USD').strip().upper()
+        carrier   = str(r[3]  or '').strip().upper()
+        basis     = str(r[10] or '').strip().upper()
+        rate_val  = float(r[11]) if r[11] is not None else 0.0
+        min_cost  = float(r[12]) if r[12] is not None else 0.0
+        currency  = str(r[14] or 'USD').strip().upper()
         dest_city = str(r[25] or '').strip().upper()
-        dest_st  = str(r[26] or '').strip().upper()
-
+        dest_st   = str(r[26] or '').strip().upper()
         if not dest_city or not dest_st:
             continue
         if basis not in ('CPM', 'FLT'):
             continue
-
-        raw[orig_city][dest_st].append({
-            'c': carrier, 'b': basis,
-            'r': float(rate_val), 'm': float(min_cost), 'cy': currency,
-            'dc': dest_city,
+        tl_raw[orig_city][dest_st].append({
+            'mo': 'TL', 'c': carrier, 'b': basis,
+            'r': rate_val, 'm': min_cost, 'cy': currency, 'dc': dest_city,
         })
 
-    # For each (orig, dest_state): keep top 3 cheapest by rate, deduplicate carrier
+    # ---- LTL rates (CWT / PLT with min_cost as the floor charge) ----
+    ws_ltl = wb['LTL CURRENT RATES']
+    ltl_rows = list(ws_ltl.iter_rows(min_row=4, values_only=True))
+    ltl_raw = defaultdict(lambda: defaultdict(list))
+    for r in ltl_rows:
+        orig_city = str(r[20] or '').strip().upper()
+        if orig_city not in pick_cities:
+            continue
+        carrier   = str(r[3]  or '').strip().upper()
+        basis     = str(r[11] or '').strip().upper()   # CWT, PLT, ECH
+        rate_val  = float(r[12]) if r[12] is not None else 0.0
+        min_cost  = float(r[13]) if r[13] is not None else 0.0
+        currency  = str(r[15] or 'USD').strip().upper()
+        dest_city = str(r[27] or '').strip().upper()
+        dest_st   = str(r[28] or '').strip().upper()
+        if not dest_city or not dest_st:
+            continue
+        if min_cost <= 0 and rate_val <= 0:
+            continue   # no usable rate data
+        ltl_raw[orig_city][dest_st].append({
+            'mo': 'LTL', 'c': carrier, 'b': basis,
+            'r': rate_val, 'm': min_cost, 'cy': currency, 'dc': dest_city,
+        })
+
+    # ---- Merge into one lookup: orig → state → {tl: [...], ltl: [...]} ----
+    all_origs = set(tl_raw) | set(ltl_raw)
+    all_states = set()
+    for d in (tl_raw, ltl_raw):
+        for v in d.values():
+            all_states.update(v.keys())
+
     result = {}
-    for orig, by_state in raw.items():
+    for orig in all_origs:
         result[orig] = {}
-        for st, entries in by_state.items():
-            # Deduplicate: one entry per carrier (keep cheapest rate)
-            best_by_carrier = {}
-            for e in entries:
+        states = set(tl_raw.get(orig, {}).keys()) | set(ltl_raw.get(orig, {}).keys())
+        for st in states:
+            # TL: dedupe by carrier, keep cheapest CPM rate (FLT kept separately)
+            tl_entries = tl_raw.get(orig, {}).get(st, [])
+            tl_best = {}
+            for e in tl_entries:
                 k = e['c']
-                if k not in best_by_carrier or e['r'] < best_by_carrier[k]['r']:
-                    best_by_carrier[k] = e
-            sorted_entries = sorted(best_by_carrier.values(), key=lambda x: x['r'])[:5]
-            result[orig][st] = sorted_entries
+                if k not in tl_best or e['r'] < tl_best[k]['r']:
+                    tl_best[k] = e
+            # LTL: dedupe by carrier, keep lowest min_cost
+            ltl_entries = ltl_raw.get(orig, {}).get(st, [])
+            ltl_best = {}
+            for e in ltl_entries:
+                k = e['c']
+                if k not in ltl_best or e['m'] < ltl_best[k]['m']:
+                    ltl_best[k] = e
+            tl_list  = sorted(tl_best.values(),  key=lambda x: x['r'])[:5]
+            ltl_list = sorted(ltl_best.values(), key=lambda x: x['m'])[:5]
+            if tl_list or ltl_list:
+                result[orig][st] = {'tl': tl_list, 'ltl': ltl_list}
 
     total_lanes = sum(len(v) for v in result.values())
-    print(f"  Rates loaded: {len(result)} origins, {total_lanes} origin→state lanes")
+    tl_origs  = len([o for o in result if any(v['tl']  for v in result[o].values())])
+    ltl_origs = len([o for o in result if any(v['ltl'] for v in result[o].values())])
+    print(f"  Rates loaded: {total_lanes} origin→state lanes  (TL: {tl_origs} origins, LTL: {ltl_origs} origins)")
     return result
 
 
@@ -1471,8 +1510,10 @@ function renderLoads(){'''),
         '<td class="num">'+g.fill+'%</td>'+
         '<td>'+esc(g.windowText)+'</td><td class="st '+g.st+'">'+esc(g.statusText)+'</td></tr>';
       html+='<tr class="detail" style="display:none"><td colspan="8">'+loadList(g.orders)+'</td></tr>';''',
-     '''const _rateCell = (DATA.rates && Object.keys(DATA.rates).length && dc!=="__none")
-        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip)+'</td>' : '<td></td>';
+     '''const _dLat = g.orders.length ? g.orders[0].lat : null;
+      const _dLng = g.orders.length ? g.orders[0].lng : null;
+      const _rateCell = (DATA.rates && Object.keys(DATA.rates).length && dc!=="__none")
+        ? '<td style="font-size:11.5px;white-space:nowrap">'+ratesBadge(dc, g.zip, _dLat, _dLng)+'</td>' : '<td></td>';
       html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
         '<td class="num">'+g.n+'</td><td class="num">'+Math.round(g.weight).toLocaleString()+'</td>'+
         '<td class="num">'+(Math.round(g.pallets*10)/10).toLocaleString()+'</td>'+
@@ -1530,53 +1571,71 @@ function zipToState(z){
   if(!/^\\d/.test(z)) return _CA_PROV[z[0].toUpperCase()]||null;
   return _ZIP3ST[z.slice(0,3).padStart(3,'0')]||null;
 }
-function getBestRates(pickKey, dropZip){
+function _haverMi(lat1,lng1,lat2,lng2){
+  const R=3958.8, r=Math.PI/180;
+  const dLat=(lat2-lat1)*r, dLng=(lng2-lng1)*r;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+function getBestRates(pickKey, dropZip, dropLat, dropLng){
   const ratesDB = (DATA.rates)||{};
-  const p = pickByKey.get(pickKey); if(!p) return [];
-  // Origin city: first part before comma, uppercased
-  const origCity = p.name.split(',')[0].trim().toUpperCase();
-  // Also try ST PAUL alias
-  const origAlt = origCity === 'ST PAUL' ? 'SAINT PAUL' : (origCity === 'SAINT PAUL' ? 'ST PAUL' : null);
-  const byState = ratesDB[origCity] || (origAlt && ratesDB[origAlt]) || {};
+  const pick = pickByKey.get(pickKey); if(!pick) return [];
+  const origCity = pick.name.split(',')[0].trim().toUpperCase();
+  const origAlt  = origCity==='ST PAUL'?'SAINT PAUL':(origCity==='SAINT PAUL'?'ST PAUL':null);
+  const laneSt   = ratesDB[origCity] || (origAlt&&ratesDB[origAlt]) || {};
   const st = zipToState(dropZip);
   if(!st) return [];
-  const entries = byState[st] || [];
-  // Sort by rate; label each entry
-  return entries.slice(0,3).map(e => ({
-    carrier: e.c,
-    mode: 'TL',
-    basis: e.b,
-    rate: e.r,
-    minCost: e.m,
-    currency: e.cy,
-    destCity: e.dc,
-  }));
-}
-function formatRate(e){
-  const cur = e.currency==='CAD' ? 'C$' : '$';
-  if(e.basis==='FLT') return cur+e.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat';
-  const rateStr = cur+(e.rate.toFixed(2))+'/mi';
-  const minStr  = e.minCost>0 ? ' (min '+cur+e.rate>0?e.minCost.toLocaleString(undefined,{maximumFractionDigits:0}):'—'+')' : '';
-  return rateStr;
-}
-function ratesBadge(pickKey, dropZip){
-  const rates = getBestRates(pickKey, dropZip);
-  if(!rates.length) return '<span style="color:#aaa;font-size:11px">No rate</span>';
-  const best = rates[0];
-  const cur = best.currency==='CAD'?'C$':'$';
-  let label;
-  if(best.basis==='FLT'){
-    label = cur+best.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat';
-  } else {
-    label = cur+best.rate.toFixed(2)+'/mi';
+  const lane = laneSt[st] || {};
+
+  // Estimate road miles (haversine × 1.3 road factor) if we have coords
+  const haveDist = (dropLat!=null && dropLng!=null);
+  const estMi    = haveDist ? _haverMi(pick.lat, pick.lng, dropLat, dropLng)*1.3 : null;
+
+  const all = [];
+
+  // TL entries
+  for(const e of (lane.tl||[])){
+    let estCost = null;
+    if(e.b==='FLT'){
+      estCost = e.r;
+    } else if(e.b==='CPM' && estMi!=null){
+      estCost = Math.max(e.r * estMi, e.m||0);
+    }
+    const cur = e.cy==='CAD'?'C$':'$';
+    let display;
+    if(e.b==='FLT') display = cur+e.r.toLocaleString(undefined,{maximumFractionDigits:0})+' flat';
+    else if(estCost!=null) display = cur+Math.round(estCost).toLocaleString()+' est.';
+    else display = cur+e.r.toFixed(2)+'/mi';
+    all.push({ carrier:e.c, mode:'TL', basis:e.b, estCost, display, currency:e.cy,
+               sortKey: estCost!=null ? estCost : (e.b==='CPM' ? e.r*500 : e.r) });
   }
-  const tip = rates.map(r=>{
-    const c2=r.currency==='CAD'?'C$':'$';
-    const rv = r.basis==='FLT'? c2+r.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat'
-                               : c2+r.rate.toFixed(2)+'/mi'+(r.minCost>0?' min '+c2+r.minCost.toLocaleString(undefined,{maximumFractionDigits:0}):'');
-    return r.carrier+' '+r.mode+' '+rv;
-  }).join('\\n');
-  return '<span class="rate-badge" title="'+esc(tip)+'">&#128176; '+esc(best.carrier)+' &mdash; '+esc(label)+'</span>';
+
+  // LTL entries — min_cost is the floor charge; label as "from $X"
+  for(const e of (lane.ltl||[])){
+    if(!e.m || e.m<=0) continue;
+    const cur = e.cy==='CAD'?'C$':'$';
+    const display = cur+Math.round(e.m).toLocaleString()+' min';
+    all.push({ carrier:e.c, mode:'LTL', basis:e.b, estCost:e.m, display, currency:e.cy,
+               sortKey: e.m });
+  }
+
+  // Sort by sortKey ascending; dedup carrier+mode (keep cheapest)
+  const seen = new Map();
+  for(const e of all){
+    const k = e.carrier+'|'+e.mode;
+    if(!seen.has(k) || e.sortKey < seen.get(k).sortKey) seen.set(k, e);
+  }
+  return [...seen.values()].sort((a,b)=>a.sortKey-b.sortKey).slice(0,5);
+}
+function ratesBadge(pickKey, dropZip, dropLat, dropLng){
+  const rates = getBestRates(pickKey, dropZip, dropLat, dropLng);
+  if(!rates.length) return '<span style="color:#aaa;font-size:11px">—</span>';
+  const best = rates[0];
+  const modeColor = best.mode==='LTL' ? '#7c3aed' : '#1d4ed8';
+  const modeBadge = '<span style="background:'+modeColor+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;margin-right:4px">'+best.mode+'</span>';
+  const tip = rates.map(r=>'['+r.mode+'] '+r.carrier+': '+r.display+(r.mode==='LTL'?' (min charge)':r.basis==='CPM'?' (est. road mi × rate)':'')).join('\\n');
+  const note = best.mode==='LTL' ? ' (min)' : (best.basis==='CPM' ? ' (est.)' : '');
+  return '<span class="rate-badge" title="'+esc(tip)+'">'+modeBadge+esc(best.carrier)+' '+esc(best.display)+esc(note)+'</span>';
 }
 function buildLoadGroups(){
   const m = new Map();
@@ -1968,8 +2027,10 @@ function findConsolidationMatches(tms){
       const fillCl = fill>90?'#c62828':fill>75?'#ef6c00':'#2e7d32';
       const winStr = (m.cWs!=null&&m.cWe!=null) ? _fd(m.cWs)+(m.cWs!==m.cWe?' – '+_fd(m.cWe):'') : '—';
       // Get representative ZIP from this match's orders for rate lookup
-      const repZip = (m.orders.find(o=>o.zip)||{zip:null}).zip || (mine.find(o=>o.zip)||{zip:null}).zip;
-      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip)+'</td>' : '';
+      const repOrder = m.orders.find(o=>o.zip) || mine.find(o=>o.zip) || {};
+      const repZip = repOrder.zip || null;
+      const repLat = repOrder.lat || null; const repLng = repOrder.lng || null;
+      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip, repLat, repLng)+'</td>' : '';
       rh += '<tr><td><span class="tms-chip" data-tms="'+esc(m.tms)+'">'+esc(m.tms)+'</span></td>'+
             '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
             '<td style="text-align:right;white-space:nowrap">'+Math.round(m.wt).toLocaleString()+' lb</td>'+
