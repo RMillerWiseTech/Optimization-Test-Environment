@@ -57,6 +57,121 @@ def _zip_to_coords(z):
     return None
 
 
+RATES_XLSX = os.path.join(BASE, "DH_CURRENT_RATES_7.30.26.xlsx")
+
+# Canadian province code → 2-letter abbreviation for state matching
+_CA_POSTAL_PROV = {
+    'A':'NL','B':'NS','C':'PE','E':'NB','G':'QC','H':'QC','J':'QC',
+    'K':'ON','L':'ON','M':'ON','N':'ON','P':'ON','R':'MB','S':'SK',
+    'T':'AB','V':'BC','X':'NT','Y':'YT',
+}
+# US ZIP first-digit prefix → state abbreviations (first 3 digits → state for precision)
+# We build a compact ZIP3→state table for the ~161 unique drop ZIPs we have
+_US_ZIP3_STATE = {}
+
+def _zip_to_state(z):
+    """Return 2-letter state/province code for a ZIP/postal code, or None."""
+    z = str(z or '').strip()
+    if not z:
+        return None
+    if not z[:1].isdigit():
+        return _CA_POSTAL_PROV.get(z[:1].upper())
+    # US ZIP: use 3-digit prefix lookup (built on first call)
+    if not _US_ZIP3_STATE:
+        _build_zip3_state()
+    return _US_ZIP3_STATE.get(z[:3].zfill(3))
+
+# Build ZIP3→state from known US ZIP ranges
+def _build_zip3_state():
+    ranges = [
+        ('005','005','MA'),('006','009','PR'),('010','027','MA'),('028','029','RI'),
+        ('030','038','NH'),('039','039','ME'),('040','049','ME'),('050','059','VT'),
+        ('060','069','CT'),('070','089','NJ'),('090','098','AE'),('100','149','NY'),
+        ('150','196','PA'),('197','199','DE'),('200','205','DC'),('206','212','MD'),
+        ('214','219','MD'),('220','246','VA'),('247','268','WV'),('270','289','NC'),
+        ('290','299','SC'),('300','319','GA'),('320','349','FL'),('350','369','AL'),
+        ('370','385','TN'),('386','397','MS'),('398','399','GA'),('400','427','KY'),
+        ('430','458','OH'),('460','479','IN'),('480','499','MI'),('500','528','IA'),
+        ('530','549','WI'),('550','567','MN'),('570','577','SD'),('580','588','ND'),
+        ('590','599','MT'),('600','620','IL'),('622','631','IL'),('633','641','MO'),
+        ('644','658','MO'),('660','679','KS'),('680','693','NE'),('700','714','LA'),
+        ('716','729','AR'),('730','749','OK'),('750','799','TX'),('800','816','CO'),
+        ('820','831','WY'),('832','838','ID'),('840','847','UT'),('850','865','AZ'),
+        ('870','884','NM'),('889','898','NV'),('900','961','CA'),('970','979','OR'),
+        ('980','994','WA'),('995','999','AK'),
+    ]
+    for lo, hi, st in ranges:
+        for p in range(int(lo), int(hi)+1):
+            _US_ZIP3_STATE[str(p).zfill(3)] = st
+
+
+def build_rates_lookup():
+    """Parse TL rates file; return compact lookup for JS embedding.
+
+    Returns dict:
+      { orig_city_upper: { dest_state_upper: [ {c,b,r,m,cy}, ... ] } }
+    Only keeps rates where origin matches a DEFAULT_PICKS city.
+    Carriers sorted cheapest-first by CPM rate (FLT carriers shown as separate entry).
+    """
+    if not os.path.exists(RATES_XLSX):
+        print(f"  NOTE: rates file not found at {RATES_XLSX} — rate display disabled.")
+        return {}
+
+    import openpyxl as _xl
+    wb = _xl.load_workbook(RATES_XLSX)
+    ws = wb['TL CURRENT RATES']
+    rows = list(ws.iter_rows(min_row=2, values_only=True))
+
+    pick_cities = {p["match"][0].upper() for p in DEFAULT_PICKS}
+    # Also add ST PAUL alias
+    pick_cities.add("ST PAUL")
+
+    from collections import defaultdict
+    # raw: orig_city → dest_state → [(carrier, basis, rate, min_cost, currency)]
+    raw = defaultdict(lambda: defaultdict(list))
+
+    for r in rows:
+        orig_city = str(r[18] or '').strip().upper()
+        if orig_city not in pick_cities:
+            continue
+        carrier  = str(r[3]  or '').strip().upper()
+        basis    = str(r[10] or '').strip().upper()  # CPM or FLT
+        rate_val = r[11] if r[11] is not None else 0
+        min_cost = r[12] if r[12] is not None else 0
+        currency = str(r[14] or 'USD').strip().upper()
+        dest_city = str(r[25] or '').strip().upper()
+        dest_st  = str(r[26] or '').strip().upper()
+
+        if not dest_city or not dest_st:
+            continue
+        if basis not in ('CPM', 'FLT'):
+            continue
+
+        raw[orig_city][dest_st].append({
+            'c': carrier, 'b': basis,
+            'r': float(rate_val), 'm': float(min_cost), 'cy': currency,
+            'dc': dest_city,
+        })
+
+    # For each (orig, dest_state): keep top 3 cheapest by rate, deduplicate carrier
+    result = {}
+    for orig, by_state in raw.items():
+        result[orig] = {}
+        for st, entries in by_state.items():
+            # Deduplicate: one entry per carrier (keep cheapest rate)
+            best_by_carrier = {}
+            for e in entries:
+                k = e['c']
+                if k not in best_by_carrier or e['r'] < best_by_carrier[k]['r']:
+                    best_by_carrier[k] = e
+            sorted_entries = sorted(best_by_carrier.values(), key=lambda x: x['r'])[:5]
+            result[orig][st] = sorted_entries
+
+    total_lanes = sum(len(v) for v in result.values())
+    print(f"  Rates loaded: {len(result)} origins, {total_lanes} origin→state lanes")
+    return result
+
+
 def extract_sheetjs():
     """Return the inlined SheetJS (xlsx) library.
 
@@ -356,6 +471,7 @@ def build_payload():
         })
 
     mtime = os.path.getmtime(SRC_XLSX)
+    rates = build_rates_lookup()
     payload = {
         "updatedAt": datetime.fromtimestamp(mtime).strftime("%b %d, %Y %I:%M:%S %p"),
         "stale": False,
@@ -365,6 +481,7 @@ def build_payload():
         "tmsAvailable": i_tms is not None,
         "pickAvailable": i_pick is not None,
         "orders": orders,
+        "rates": rates,
     }
     print(f"  built {len(orders)} orders ({skipped} skipped for missing coords, {excluded} excluded by rules)")
     return payload
@@ -456,6 +573,9 @@ NEW_CSS = """<style>
   .tms-banner .tms-warn i { font-style:normal; font-weight:700; margin:0 4px; }
   .tms-banner .tms-locs { margin-top:5px; padding-top:5px; border-top:1px dashed #e0b000; }
   .tms-banner .tms-locs .locrow { font-size:12.5px; color:#5a4a00; line-height:1.8; }
+  /* rate badge in consolidation panel */
+  .rate-badge { display:inline-block; background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d;
+    border-radius:5px; padding:2px 7px; font-size:11.5px; font-weight:600; cursor:help; white-space:nowrap; }
   /* status filter buttons: wrap on narrow panels */
   .filters { flex-wrap:wrap !important; }
   .filters button { flex:0 1 auto; min-width:60px; }
@@ -1320,7 +1440,80 @@ function renderLoads(){'''),
   const tr=e.target.closest("tr.grp"); if(!tr) return;'''),
 ]
 
-NEW_FUNCS = '''function buildLoadGroups(){
+NEW_FUNCS = '''
+// ---- Rate lookup helpers ----
+const _CA_PROV = {A:'NL',B:'NS',C:'PE',E:'NB',G:'QC',H:'QC',J:'QC',K:'ON',L:'ON',M:'ON',N:'ON',P:'ON',R:'MB',S:'SK',T:'AB',V:'BC',X:'NT',Y:'YT'};
+const _ZIP3ST = (()=>{
+  const t={};
+  [['005','005','MA'],['010','027','MA'],['028','029','RI'],['030','038','NH'],['039','049','ME'],
+   ['050','059','VT'],['060','069','CT'],['070','089','NJ'],['100','149','NY'],['150','196','PA'],
+   ['197','199','DE'],['200','205','DC'],['206','219','MD'],['220','246','VA'],['247','268','WV'],
+   ['270','289','NC'],['290','299','SC'],['300','319','GA'],['320','349','FL'],['350','369','AL'],
+   ['370','385','TN'],['386','397','MS'],['398','399','GA'],['400','427','KY'],['430','458','OH'],
+   ['460','479','IN'],['480','499','MI'],['500','528','IA'],['530','549','WI'],['550','567','MN'],
+   ['570','577','SD'],['580','588','ND'],['590','599','MT'],['600','631','IL'],['633','641','MO'],
+   ['644','658','MO'],['660','679','KS'],['680','693','NE'],['700','714','LA'],['716','729','AR'],
+   ['730','749','OK'],['750','799','TX'],['800','816','CO'],['820','831','WY'],['832','838','ID'],
+   ['840','847','UT'],['850','865','AZ'],['870','884','NM'],['889','898','NV'],['900','961','CA'],
+   ['970','979','OR'],['980','994','WA'],['995','999','AK']
+  ].forEach(([lo,hi,st])=>{ for(let i=+lo;i<=+hi;i++) t[String(i).padStart(3,'0')]=st; });
+  return t;
+})();
+function zipToState(z){
+  if(!z) return null;
+  z = String(z).trim();
+  if(!/^\\d/.test(z)) return _CA_PROV[z[0].toUpperCase()]||null;
+  return _ZIP3ST[z.slice(0,3).padStart(3,'0')]||null;
+}
+function getBestRates(pickKey, dropZip){
+  const ratesDB = (DATA.rates)||{};
+  const p = pickByKey.get(pickKey); if(!p) return [];
+  // Origin city: first part before comma, uppercased
+  const origCity = p.name.split(',')[0].trim().toUpperCase();
+  // Also try ST PAUL alias
+  const origAlt = origCity === 'ST PAUL' ? 'SAINT PAUL' : (origCity === 'SAINT PAUL' ? 'ST PAUL' : null);
+  const byState = ratesDB[origCity] || (origAlt && ratesDB[origAlt]) || {};
+  const st = zipToState(dropZip);
+  if(!st) return [];
+  const entries = byState[st] || [];
+  // Sort by rate; label each entry
+  return entries.slice(0,3).map(e => ({
+    carrier: e.c,
+    mode: 'TL',
+    basis: e.b,
+    rate: e.r,
+    minCost: e.m,
+    currency: e.cy,
+    destCity: e.dc,
+  }));
+}
+function formatRate(e){
+  const cur = e.currency==='CAD' ? 'C$' : '$';
+  if(e.basis==='FLT') return cur+e.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat';
+  const rateStr = cur+(e.rate.toFixed(2))+'/mi';
+  const minStr  = e.minCost>0 ? ' (min '+cur+e.rate>0?e.minCost.toLocaleString(undefined,{maximumFractionDigits:0}):'—'+')' : '';
+  return rateStr;
+}
+function ratesBadge(pickKey, dropZip){
+  const rates = getBestRates(pickKey, dropZip);
+  if(!rates.length) return '<span style="color:#aaa;font-size:11px">No rate</span>';
+  const best = rates[0];
+  const cur = best.currency==='CAD'?'C$':'$';
+  let label;
+  if(best.basis==='FLT'){
+    label = cur+best.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat';
+  } else {
+    label = cur+best.rate.toFixed(2)+'/mi';
+  }
+  const tip = rates.map(r=>{
+    const c2=r.currency==='CAD'?'C$':'$';
+    const rv = r.basis==='FLT'? c2+r.rate.toLocaleString(undefined,{maximumFractionDigits:0})+' flat'
+                               : c2+r.rate.toFixed(2)+'/mi'+(r.minCost>0?' min '+c2+r.minCost.toLocaleString(undefined,{maximumFractionDigits:0}):'');
+    return r.carrier+' '+r.mode+' '+rv;
+  }).join('\\n');
+  return '<span class="rate-badge" title="'+esc(tip)+'">&#128176; '+esc(best.carrier)+' &mdash; '+esc(label)+'</span>';
+}
+function buildLoadGroups(){
   const m = new Map();
   for (const o of (DATA.orders||[])){ const g=(o.loadGroup||"").trim(); if(!g) continue; m.set(g,(m.get(g)||0)+1); }
   loadGroups = [...m.keys()].sort();
@@ -1701,23 +1894,30 @@ function findConsolidationMatches(tms){
     rh += '<div style="color:#92400e;font-size:12.5px;">No other loads from the same DC fit on the same truck with an overlapping delivery window.</div>';
   } else {
     rh += '<div style="font-weight:700;font-size:13px;color:#92400e;margin-bottom:6px;">✅ '+matches.length+' load'+(matches.length>1?'s':'')+' could ship with this one (gold rings on map):</div>';
-    rh += '<table><tr class="match-hdr"><th>TMS #</th><th>Destination</th><th style="text-align:right">Wt (lb)</th><th style="text-align:right">Pal sp</th><th>Ship window</th><th style="text-align:right">Truck fill</th></tr>';
+    const hasRates = !!(DATA.rates && Object.keys(DATA.rates).length);
+    rh += '<table><tr class="match-hdr"><th>TMS #</th><th>Destination</th><th style="text-align:right">Wt (lb)</th><th style="text-align:right">Pal sp</th><th>Ship window</th>'+(hasRates?'<th>Cheapest carrier</th>':'')+'<th style="text-align:right">Truck fill</th></tr>';
     for (const m of matches){
       const wFill  = Math.round(m.cWt/maxW*100);
       const pFill  = Math.round(m.cPal/maxP*100);
       const fill   = Math.max(wFill,pFill);
       const fillCl = fill>90?'#c62828':fill>75?'#ef6c00':'#2e7d32';
       const winStr = (m.cWs!=null&&m.cWe!=null) ? _fd(m.cWs)+(m.cWs!==m.cWe?' – '+_fd(m.cWe):'') : '—';
+      // Get representative ZIP from this match's orders for rate lookup
+      const repZip = (m.orders.find(o=>o.zip)||{zip:null}).zip || (mine.find(o=>o.zip)||{zip:null}).zip;
+      const rateCl = hasRates ? '<td style="white-space:nowrap;font-size:11.5px">'+ratesBadge(myPick, repZip)+'</td>' : '';
       rh += '<tr><td><span class="tms-chip" data-tms="'+esc(m.tms)+'">'+esc(m.tms)+'</span></td>'+
-            '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
+            '<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(m.name)+'">'+esc(m.name)+'</td>'+
             '<td style="text-align:right;white-space:nowrap">'+Math.round(m.wt).toLocaleString()+' lb</td>'+
             '<td style="text-align:right;white-space:nowrap">'+(Math.round(m.pal*10)/10)+' sp</td>'+
             '<td style="white-space:nowrap">'+esc(winStr)+'</td>'+
+            rateCl+
             '<td style="text-align:right;font-weight:700;color:'+fillCl+';white-space:nowrap">'+
               '<div class="fill-bar" style="width:'+Math.min(fill,100)+'px;background:'+fillCl+'"></div> '+fill+'%'+
             '</td></tr>';
     }
-    rh += '</table><div style="font-size:11px;color:#92400e;margin-top:6px">Truck limits: '+maxW.toLocaleString()+' lb · '+maxP+' pallet sp · Same pick DC only · Delivery windows must overlap</div>';
+    rh += '</table>';
+    if(hasRates) rh += '<div style="font-size:11px;color:#92400e;margin-top:4px">&#128176; Rate = cheapest TL carrier for this origin → destination state. Hover for top 3. CPM rates shown as $/mi (actual cost depends on mileage).</div>';
+    rh += '<div style="font-size:11px;color:#92400e;margin-top:4px">Truck limits: '+maxW.toLocaleString()+' lb · '+maxP+' pallet sp · Same pick DC only · Delivery windows must overlap</div>';
   }
   rh += '</div>';
 
