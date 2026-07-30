@@ -26,9 +26,40 @@ OUT_HTML   = os.path.join(BASE, "DeliveryMap (all columns + filters).html")  # t
 MAKER_HTML = os.path.join(BASE, "Map Maker.html")                           # optional; not needed (SheetJS is bundled)
 SHEETJS_CACHE = os.path.join(BASE, "sheetjs.js")                            # bundled SheetJS reader (keep this file)
 ZIP_COORDS    = os.path.join(BASE, "zip_coords.json")                       # US+CA ZIP/postal → lat,lng lookup table
+STOP_LOCS     = os.path.join(BASE, "stop_locations.json")                   # enabled stop locations → lat,lng lookup
 
 
 _zip_db = None
+_stop_db = None
+
+def _load_stop_db():
+    global _stop_db
+    if _stop_db is not None:
+        return _stop_db
+    if not os.path.exists(STOP_LOCS):
+        print("  NOTE: stop_locations.json not found — will fall back to ZIP geocoding.")
+        _stop_db = {"by_ref": {}, "by_namezip": {}}
+        return _stop_db
+    with open(STOP_LOCS, "r", encoding="utf-8") as f:
+        _stop_db = json.load(f)
+    return _stop_db
+
+def _stop_to_coords(locref, name, postal):
+    """Return (lat, lng) using stop locations DB, or None.
+    Tries: 1) exact location reference, 2) name+postal combined key."""
+    db = _load_stop_db()
+    if locref:
+        entry = db["by_ref"].get(str(locref).strip())
+        if entry:
+            return (entry[0], entry[1])
+    if name and postal:
+        n = str(name).strip().upper()
+        p = str(postal).strip().split("-")[0].strip()
+        p = p.zfill(5) if p[:1].isdigit() else p.upper()
+        entry = db["by_namezip"].get(n + "|" + p)
+        if entry:
+            return (entry[0], entry[1])
+    return None
 def _load_zip_db():
     global _zip_db
     if _zip_db is not None:
@@ -350,6 +381,7 @@ def build_payload():
         "last drop plan date end":    ["last drop plan date end",   "leg drop plan end date"],
         "last drop name":             ["last drop name",            "drop location name"],
         "last drop postal code":      ["last drop postal code",     "drop location postal code"],
+        "drop location reference":    ["drop location reference number", "drop location ref", "drop locref"],
         "pallet spaces":              ["pallet spaces",             "shipment pallet spaces"],
         "plannedorno":                ["plannedorno",               "load status"],
         "first pick appt date start": ["first pick appt date start","load pick appt start date"],
@@ -379,15 +411,20 @@ def build_payload():
     i_tms   = col("TMS ID")
     i_lg    = col("Load Group")
     i_pkdt  = col("First Pick Appt Date Start")
-    i_lat   = col("lat")
-    i_lng   = col("lng")
+    i_lat    = col("lat")
+    i_lng    = col("lng")
+    i_dropref = col("Drop Location Reference")
     i_scac  = col("SCAC", "Carrier SCAC", "Carrier Code", "SCAC Code", "Carrier")
     # which header indices to EXCLUDE from the popup field table (lat/lng only)
     skip_fields = {i_lat, i_lng}
 
     has_coords = (i_lat is not None and i_lng is not None)
+    has_stop_db = os.path.exists(STOP_LOCS)
     if not has_coords:
-        print("  NOTE: no lat/lng columns — will geocode from ZIP codes using zip_coords.json")
+        if has_stop_db:
+            print("  NOTE: no lat/lng columns — geocoding from stop_locations.json (with ZIP fallback)")
+        else:
+            print("  NOTE: no lat/lng columns — will geocode from ZIP codes using zip_coords.json")
     if i_scac is not None:
         print(f"  NOTE: SCAC column found — will exclude carriers: {', '.join(sorted(EXCLUDE_SCACS))}")
     else:
@@ -406,14 +443,21 @@ def build_payload():
             except (TypeError, ValueError):
                 pass
         if lat is None or lng is None:
-            # Fall back to ZIP geocoding
-            z = str(row[i_zip]).strip() if i_zip is not None and row[i_zip] is not None else ""
-            coords = _zip_to_coords(z)
+            # Try stop locations DB first (by reference number, then name+postal)
+            locref = str(row[i_dropref]).strip() if i_dropref is not None and row[i_dropref] is not None else ""
+            name_v = str(row[i_name]).strip() if i_name is not None and row[i_name] is not None else ""
+            zip_v  = str(row[i_zip]).strip()  if i_zip  is not None and row[i_zip]  is not None else ""
+            coords = _stop_to_coords(locref, name_v, zip_v)
             if coords:
                 lat, lng = coords
             else:
-                skipped += 1
-                continue
+                # Final fallback: ZIP geocoding
+                coords = _zip_to_coords(zip_v)
+                if coords:
+                    lat, lng = coords
+                else:
+                    skipped += 1
+                    continue
 
         # --- Exclusion rules ---
         dest_name = str(row[i_name]).strip() if i_name is not None and row[i_name] is not None else ""
