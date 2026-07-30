@@ -1501,7 +1501,7 @@ function renderLoads(){'''),
     # --- Loads by DC: add Best Rate column to header and destination rows ---
     ('loads rate column header',
      'const cols=[["name","Destination",""],["zip","ZIP",""],["n","Loads","num"],["weight","Weight (lb)","num"],["pallets","Pallet Spaces","num"],["fill","Truck %","num"],["window","Delivery window",""],["st","Ship together?",""]];',
-     'const cols=[["name","Destination",""],["zip","ZIP",""],["n","Loads","num"],["weight","Weight (lb)","num"],["pallets","Pallet Spaces","num"],["fill","Truck %","num"],["window","Delivery window",""],["st","Ship together?",""],["rate","Best rate",""]];'),
+     'const cols=[["name","Destination",""],["zip","ZIP",""],["n","Loads","num"],["weight","Weight (lb)","num"],["pallets","Pallet Spaces","num"],["fill","Truck %","num"],["window","Delivery window",""],["st","Ship together?",""],["rate","LTL / TL Rate",""]];'),
 
     ('loads rate column row',
      '''html+='<tr class="grp '+(g.green?"green":"")+'"><td><span class="caret">&#9656;</span>'+esc(g.name)+'</td><td>'+esc(g.zip)+'</td>'+
@@ -1630,12 +1630,20 @@ function getBestRates(pickKey, dropZip, dropLat, dropLng){
 function ratesBadge(pickKey, dropZip, dropLat, dropLng){
   const rates = getBestRates(pickKey, dropZip, dropLat, dropLng);
   if(!rates.length) return '<span style="color:#aaa;font-size:11px">—</span>';
-  const best = rates[0];
-  const modeColor = best.mode==='LTL' ? '#7c3aed' : '#1d4ed8';
-  const modeBadge = '<span style="background:'+modeColor+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700;margin-right:4px">'+best.mode+'</span>';
-  const tip = rates.map(r=>'['+r.mode+'] '+r.carrier+': '+r.display+(r.mode==='LTL'?' (min charge)':r.basis==='CPM'?' (est. road mi × rate)':'')).join('\\n');
-  const note = best.mode==='LTL' ? ' (min)' : (best.basis==='CPM' ? ' (est.)' : '');
-  return '<span class="rate-badge" title="'+esc(tip)+'">'+modeBadge+esc(best.carrier)+' '+esc(best.display)+esc(note)+'</span>';
+  const bestTL  = rates.find(r=>r.mode==='TL');
+  const bestLTL = rates.find(r=>r.mode==='LTL');
+  function line(r){
+    if(!r) return '<span style="color:#bbb;font-size:11px">—</span>';
+    const col = r.mode==='LTL'?'#7c3aed':'#1d4ed8';
+    const badge = '<span style="background:'+col+';color:#fff;border-radius:3px;padding:0px 5px;font-size:10px;font-weight:700;margin-right:4px">'+r.mode+'</span>';
+    const note = r.mode==='LTL' ? ' (min)' : (r.basis==='CPM' ? ' (est.)' : '');
+    return badge+esc(r.carrier)+'&nbsp;'+esc(r.display)+esc(note);
+  }
+  const allTip = rates.map(r=>'['+r.mode+'] '+r.carrier+': '+r.display).join('\\n');
+  return '<span class="rate-badge" title="'+esc(allTip)+'" style="display:inline-flex;flex-direction:column;gap:2px;padding:3px 7px">'+
+    '<span>'+line(bestLTL)+'</span>'+
+    '<span>'+line(bestTL)+'</span>'+
+  '</span>';
 }
 function buildLoadGroups(){
   const m = new Map();
@@ -2042,7 +2050,7 @@ function findConsolidationMatches(tms){
             '</td></tr>';
     }
     rh += '</table>';
-    if(hasRates) rh += '<div style="font-size:11px;color:#92400e;margin-top:4px">&#128176; Rate = cheapest TL carrier for this origin → destination state. Hover for top 3. CPM rates shown as $/mi (actual cost depends on mileage).</div>';
+    if(hasRates) rh += '<div style="font-size:11px;color:#92400e;margin-top:4px">Rates: cheapest LTL (min charge) and TL (est. cost) for this origin → destination state. Hover for full list.</div>';
     rh += '<div style="font-size:11px;color:#92400e;margin-top:4px">Truck limits: '+maxW.toLocaleString()+' lb · '+maxP+' pallet sp · Same pick DC only · Delivery windows must overlap</div>';
   }
   rh += '</div>';
