@@ -1547,9 +1547,71 @@ function renderLoads(){'''),
   const th=e.target.closest("th.lh");
   if(th){ const c=th.dataset.col; if(loadsSortKey===c) loadsSortDir=-loadsSortDir; else { loadsSortKey=c; loadsSortDir=1; } renderLoads(); return; }
   const tr=e.target.closest("tr.grp"); if(!tr) return;'''),
+
+    # --- ORS route-check button in destination popup ---
+    ('ors route check button',
+     "  html += '</div></div>';\n  return html;\n}",
+     r"""  // Route-check button: unique ID per popup so multiple popups don't collide
+  const _orsId = 'ors-' + (g.lat+'_'+g.lng).replace(/[^0-9]/g,'_');
+  const _pickForORS = (list.find(o=>o.pick) || {}).pick;
+  const _pickObj = _pickForORS ? pickByKey.get(_pickForORS) : null;
+  if(_pickObj){
+    html += '<div style="padding:6px 12px 8px;border-top:1px solid #e5e7eb">';
+    html += '<button onclick="_orsCheckRoute('+_pickObj.lat+','+_pickObj.lng+','+g.lat+','+g.lng+',\''+_orsId+'\')" ';
+    html += 'style="width:100%;padding:6px 10px;background:#0284c7;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600">&#128666; Check Route for Alerts</button>';
+    html += '</div>';
+    html += '<div id="'+_orsId+'"></div>';
+  }
+  html += '</div></div>';
+  return html;
+}"""),
 ]
 
 NEW_FUNCS = '''
+// ---- OpenRouteService traffic/route check ----
+const ORS_API_KEY = "YOUR_ORS_KEY_HERE";   // <-- replace with key from openrouteservice.org (free)
+let _orsSeq = 0;
+async function _orsCheckRoute(originLat, originLng, dropLat, dropLng, elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.innerHTML = '<span style="color:#555;font-size:11.5px">Checking route…</span>';
+  if(!ORS_API_KEY || ORS_API_KEY==="YOUR_ORS_KEY_HERE"){
+    el.innerHTML = '<span style="color:#c0392b;font-size:11.5px">⚠ Add ORS API key to Rebuild Delivery Map.py to enable route checks.</span>';
+    return;
+  }
+  const url = `https://api.openrouteservice.org/v2/directions/driving-hgv?api_key=${ORS_API_KEY}&start=${originLng},${originLat}&end=${dropLng},${dropLat}`;
+  try {
+    const resp = await fetch(url);
+    if(!resp.ok){ const t=await resp.text(); throw new Error('ORS '+resp.status+': '+t.slice(0,120)); }
+    const data = await resp.json();
+    const seg = data.features && data.features[0] && data.features[0].properties && data.features[0].properties.segments && data.features[0].properties.segments[0];
+    if(!seg){ el.innerHTML='<span style="color:#888;font-size:11.5px">No route data returned.</span>'; return; }
+    const distMi = (seg.distance * 0.000621371).toFixed(0);
+    const durH = Math.floor(seg.duration/3600), durM = Math.round((seg.duration%3600)/60);
+    const durStr = durH>0 ? durH+'h '+durM+'m' : durM+'m';
+    const warnings = (data.features[0].properties.warnings||[]).map(w=>w.message||w.code||String(w));
+    const steps = seg.steps||[];
+    const alerts = steps.flatMap(s=>(s.warnings||[]).map(w=>w.message||w.code||String(w)));
+    const allWarn = [...new Set([...warnings,...alerts])].filter(Boolean);
+    let out = `<div style="font-size:12px;padding:8px 12px;background:#f0f9ff;border-top:1px solid #bae6fd">`;
+    out += `<div style="font-weight:700;color:#0369a1;margin-bottom:4px">&#128666; Route Check</div>`;
+    out += `<div style="color:#374151"><b>${distMi} mi</b> &nbsp;·&nbsp; est. <b>${durStr}</b> drive time</div>`;
+    if(allWarn.length){
+      out += `<div style="margin-top:5px;color:#b45309;font-weight:600;font-size:11px">&#9888; Alerts (${allWarn.length})</div>`;
+      out += `<ul style="margin:3px 0 0 14px;padding:0;font-size:11.5px;color:#92400e">`;
+      allWarn.forEach(w=>{ out+=`<li>${esc(w)}</li>`; });
+      out += `</ul>`;
+    } else {
+      out += `<div style="margin-top:4px;color:#15803d;font-size:11.5px">&#10003; No route alerts found</div>`;
+    }
+    out += `<div style="font-size:10.5px;color:#94a3b8;margin-top:4px">Source: OpenRouteService · OSM data</div>`;
+    out += `</div>`;
+    el.innerHTML = out;
+  } catch(e){
+    el.innerHTML = `<span style="color:#c0392b;font-size:11.5px">&#9888; Route check failed: ${esc(String(e.message||e))}</span>`;
+  }
+}
+
 // ---- Rate lookup helpers ----
 const _CA_PROV = {A:'NL',B:'NS',C:'PE',E:'NB',G:'QC',H:'QC',J:'QC',K:'ON',L:'ON',M:'ON',N:'ON',P:'ON',R:'MB',S:'SK',T:'AB',V:'BC',X:'NT',Y:'YT'};
 const _ZIP3ST = (()=>{
